@@ -18,3 +18,23 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npx vite build
+
+  rust-check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: cargo check
+        working-directory: src-tauri
+        run: cargo check --all-targets
+      - name: cargo clippy
+        working-directory: src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+        continue-on-error: true

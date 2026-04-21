@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Sparkles, ShieldCheck, Boxes, Rocket, ArrowRight } from "lucide-react";
 import { cn } from "./lib/cn";
+import Doctor from "./pages/Doctor";
 
 type Step = "welcome" | "doctor" | "provider" | "install" | "done";
 
@@ -21,7 +22,7 @@ export default function App() {
         {step !== "welcome" && <StepBar current={step} />}
         <div className="flex-1 px-10 py-8 animate-fade-slide-in" key={step}>
           {step === "welcome" && <Welcome onStart={() => setStep("doctor")} />}
-          {step === "doctor" && <Placeholder title="环境体检" desc="M2 开发中：将自动检测 OS / 虚拟化 / WSL / Homebrew / 依赖 / 网络。" />}
+          {step === "doctor" && <Doctor onNext={() => setStep("provider")} />}
           {step === "provider" && <Placeholder title="选择模型" desc="M5 开发中：卡片式 Provider 选择 + 获取 Key 链接 + 测试连接。" />}
           {step === "install" && <Placeholder title="一键安装" desc="M3/M4 开发中：流式日志与进度。" />}
           {step === "done" && <Placeholder title="完成" desc="M6 开发中。" />}

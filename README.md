@@ -4,7 +4,7 @@
 
 让小白点点点就能用上 **HermesAgent** 的图形化一键安装器。
 
-![progress](https://img.shields.io/badge/progress-8%25-FF6B00?style=for-the-badge)
+![progress](https://img.shields.io/badge/progress-22%25-FF6B00?style=for-the-badge)
 ![platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-0B0F19?style=for-the-badge)
 ![license](https://img.shields.io/badge/license-MIT-22C55E?style=for-the-badge)
 
