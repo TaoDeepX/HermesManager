@@ -42,7 +42,21 @@ pub async fn install(app: AppHandle, job_id: &str, opts: &InstallOptions) -> Res
     let code = run_streaming(&app, job_id, "wsl", "powershell.exe", &args_ref, None).await?;
     if code != 0 {
         return Err(anyhow!(
-            "WSL 引导失败（退出码 {}）。请检查是否已启用虚拟化/Hyper-V，必要时重启电脑。",
+r#"WSL 引导失败（退出码 {}）。
+
+请以【管理员身份】打开 PowerShell，依次执行以下命令：
+
+1. 启用 WSL 和虚拟机功能：
+   dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+   dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
+
+2. 重启电脑
+
+3. 重启后再次以管理员身份打开 PowerShell，执行：
+   wsl --install -d Ubuntu-22.04
+   wsl --set-default-version 2
+
+4. 完成后重新运行 HermesManager"#,
             code
         ));
     }
