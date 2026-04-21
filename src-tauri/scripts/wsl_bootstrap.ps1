@@ -77,7 +77,9 @@ function Import-UbuntuOffline {
 }
 
 function Ensure-Distro {
-    $existing = (wsl.exe -l -q 2>$null | Where-Object { $_.Trim() -ne "" } | ForEach-Object { $_.Trim() })
+    # wsl.exe 输出 UTF-16 LE，含 \x00 空字符，必须清理后才能匹配
+    $existing = (wsl.exe -l -q 2>$null | ForEach-Object { ($_ -replace '\x00','').Trim() } | Where-Object { $_ -ne '' })
+    Info "已安装的发行版：$($existing -join ', ')"
     if ($existing -contains $DistroName) {
         Ok "发行版已存在：$DistroName"
         return
