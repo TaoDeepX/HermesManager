@@ -24,6 +24,11 @@ async fn test_provider(req: probe::TestRequest) -> probe::TestResponse {
 }
 
 #[tauri::command]
+async fn list_models(req: probe::ListModelsRequest) -> probe::ListModelsResponse {
+    probe::list_models(req).await
+}
+
+#[tauri::command]
 fn open_external(url: String) -> Result<(), String> {
     opener::open(&url).map_err(|e| e.to_string())
 }
@@ -36,6 +41,7 @@ pub fn run() {
             detect_environment,
             start_install,
             test_provider,
+            list_models,
             open_external
         ])
         .run(tauri::generate_context!())

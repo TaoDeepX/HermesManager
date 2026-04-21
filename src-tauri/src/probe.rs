@@ -1,7 +1,121 @@
-//! Provider 连接测试：向 OpenAI 兼容端点发送一个最小 chat.completions 请求
+//! Provider 连接测试与模型列表获取
 
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 模型列表
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[derive(Deserialize, Debug)]
+pub struct ListModelsRequest {
+    pub base_url: String,
+    pub api_key: Option<String>,
+    #[serde(default)]
+    pub is_ollama: bool,
+}
+
+#[derive(Serialize, Debug)]
+pub struct ListModelsResponse {
+    pub ok: bool,
+    pub models: Vec<String>,
+    pub error: Option<String>,
+}
+
+pub async fn list_models(req: ListModelsRequest) -> ListModelsResponse {
+    let client = match reqwest::Client::builder()
+        .timeout(Duration::from_secs(10))
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            return ListModelsResponse {
+                ok: false,
+                models: vec![],
+                error: Some(format!("client error: {}", e)),
+            };
+        }
+    };
+
+    if req.is_ollama {
+        // Ollama: GET /api/tags
+        let url = format!("{}/api/tags", req.base_url.trim_end_matches('/'));
+        match client.get(&url).send().await {
+            Ok(resp) if resp.status().is_success() => {
+                #[derive(Deserialize)]
+                struct OllamaResp { models: Vec<OllamaModel> }
+                #[derive(Deserialize)]
+                struct OllamaModel { name: String }
+                
+                match resp.json::<OllamaResp>().await {
+                    Ok(data) => ListModelsResponse {
+                        ok: true,
+                        models: data.models.into_iter().map(|m| m.name).collect(),
+                        error: None,
+                    },
+                    Err(e) => ListModelsResponse {
+                        ok: false,
+                        models: vec![],
+                        error: Some(format!("parse error: {}", e)),
+                    },
+                }
+            }
+            Ok(resp) => ListModelsResponse {
+                ok: false,
+                models: vec![],
+                error: Some(format!("HTTP {}", resp.status())),
+            },
+            Err(e) => ListModelsResponse {
+                ok: false,
+                models: vec![],
+                error: Some(format!("{}", e)),
+            },
+        }
+    } else {
+        // OpenAI 兼容: GET /v1/models
+        let url = format!("{}/models", req.base_url.trim_end_matches('/'));
+        let mut builder = client.get(&url);
+        if let Some(k) = req.api_key.as_ref().filter(|s| !s.is_empty()) {
+            builder = builder.bearer_auth(k);
+        }
+        
+        match builder.send().await {
+            Ok(resp) if resp.status().is_success() => {
+                #[derive(Deserialize)]
+                struct OpenAIResp { data: Vec<OpenAIModel> }
+                #[derive(Deserialize)]
+                struct OpenAIModel { id: String }
+                
+                match resp.json::<OpenAIResp>().await {
+                    Ok(data) => ListModelsResponse {
+                        ok: true,
+                        models: data.data.into_iter().map(|m| m.id).collect(),
+                        error: None,
+                    },
+                    Err(e) => ListModelsResponse {
+                        ok: false,
+                        models: vec![],
+                        error: Some(format!("parse error: {}", e)),
+                    },
+                }
+            }
+            Ok(resp) => ListModelsResponse {
+                ok: false,
+                models: vec![],
+                error: Some(format!("HTTP {}", resp.status())),
+            },
+            Err(e) => ListModelsResponse {
+                ok: false,
+                models: vec![],
+                error: Some(format!("{}", e)),
+            },
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 连接测试
+// ─────────────────────────────────────────────────────────────────────────────
 
 #[derive(Deserialize, Debug)]
 pub struct TestRequest {

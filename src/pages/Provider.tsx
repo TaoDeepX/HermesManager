@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
@@ -12,7 +12,7 @@ import {
   Info,
 } from "lucide-react";
 import { PROVIDERS, PROVIDER_GROUPS, type Provider, type ProviderGroup } from "../lib/providers";
-import { testProvider, openExternal, type TestResponse } from "../lib/tauri";
+import { testProvider, listModels, openExternal, type TestResponse } from "../lib/tauri";
 import { cn } from "../lib/cn";
 
 export interface ProviderSelection {
@@ -37,6 +37,9 @@ export default function ProviderPage({
   const [model, setModel] = useState(PROVIDERS[0].defaultModel ?? "");
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<TestResponse | null>(null);
+  const [models, setModels] = useState<string[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [modelsError, setModelsError] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -51,7 +54,48 @@ export default function ProviderPage({
     setBaseUrl(p.baseUrl ?? "");
     setModel(p.defaultModel ?? "");
     setTestResult(null);
+    setModels([]);
+    setModelsError(null);
   };
+
+  // 自动获取模型列表
+  const fetchModels = async () => {
+    if (!selected || !baseUrl) return;
+    // 云端 Provider 需要 API Key（除非是 noKey）
+    if (!selected.noKey && !apiKey) return;
+    
+    setLoadingModels(true);
+    setModelsError(null);
+    try {
+      const isOllama = selected.id === "ollama";
+      const res = await listModels({
+        base_url: isOllama ? baseUrl.replace("/v1", "") : baseUrl,
+        api_key: selected.noKey ? undefined : apiKey,
+        is_ollama: isOllama,
+      });
+      if (res.ok) {
+        setModels(res.models);
+        // 如果当前没有选中模型，自动选择第一个
+        if (res.models.length > 0 && !model) {
+          setModel(res.models[0]);
+        }
+      } else {
+        setModelsError(res.error ?? "获取失败");
+      }
+    } catch (e) {
+      setModelsError(String(e));
+    } finally {
+      setLoadingModels(false);
+    }
+  };
+
+  // 当 Provider、API Key、Base URL 变化时自动获取模型列表
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchModels();
+    }, 500); // 防抖
+    return () => clearTimeout(timer);
+  }, [selected?.id, apiKey, baseUrl]);
 
   const canTest = selected && (selected.noKey || apiKey.length > 0) && baseUrl && model;
 
@@ -174,13 +218,33 @@ export default function ProviderPage({
                 />
               </Field>
               <Field label="模型名">
-                <input
-                  className="input font-mono text-xs"
-                  placeholder="e.g. gpt-4o"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                />
-                {selected.suggestedModels && selected.suggestedModels.length > 0 && (
+                {loadingModels ? (
+                  <div className="input flex items-center gap-2 text-text-muted text-xs">
+                    <Loader2 className="animate-spin" size={12} />
+                    正在获取模型列表…
+                  </div>
+                ) : models.length > 0 ? (
+                  <select
+                    className="input font-mono text-xs"
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                  >
+                    {models.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className="input font-mono text-xs"
+                    placeholder="e.g. gpt-4o"
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                  />
+                )}
+                {modelsError && (
+                  <div className="mt-1 text-xs text-warn">{modelsError}</div>
+                )}
+                {!loadingModels && models.length === 0 && selected.suggestedModels && selected.suggestedModels.length > 0 && (
                   <div className="mt-1.5 flex flex-wrap gap-1">
                     {selected.suggestedModels.map((m) => (
                       <button

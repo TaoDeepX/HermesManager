@@ -42,6 +42,22 @@ export function testProvider(req: TestRequest): Promise<TestResponse> {
   return invoke<TestResponse>("test_provider", { req });
 }
 
+export interface ListModelsRequest {
+  base_url: string;
+  api_key?: string;
+  is_ollama?: boolean;
+}
+
+export interface ListModelsResponse {
+  ok: boolean;
+  models: string[];
+  error: string | null;
+}
+
+export function listModels(req: ListModelsRequest): Promise<ListModelsResponse> {
+  return invoke<ListModelsResponse>("list_models", { req });
+}
+
 export function openExternal(url: string): Promise<void> {
   return invoke("open_external", { url });
 }
