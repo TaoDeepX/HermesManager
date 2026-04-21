@@ -4,6 +4,7 @@ import { cn } from "./lib/cn";
 import Doctor from "./pages/Doctor";
 import Install from "./pages/Install";
 import ProviderPage, { type ProviderSelection } from "./pages/Provider";
+import Done from "./pages/Done";
 
 type Step = "welcome" | "doctor" | "provider" | "install" | "done";
 
@@ -46,7 +47,7 @@ export default function App() {
               onDone={() => setStep("done")}
             />
           )}
-          {step === "done" && <Placeholder title="完成" desc="M6 开发中。" />}
+          {step === "done" && <Done />}
         </div>
       </main>
     </div>
@@ -151,16 +152,4 @@ function buildEnvKv(sel: ProviderSelection): [string, string][] {
   if (sel.baseUrl) kv.push(["HERMES_BASE_URL", sel.baseUrl]);
   if (sel.model) kv.push(["HERMES_MODEL", sel.model]);
   return kv;
-}
-
-function Placeholder({ title, desc }: { title: string; desc: string }) {
-  return (
-    <div className="max-w-2xl mx-auto mt-16 text-center">
-      <div className="inline-flex w-12 h-12 rounded-xl bg-brand-soft text-brand items-center justify-center">
-        <Sparkles />
-      </div>
-      <h2 className="mt-4 text-2xl font-semibold">{title}</h2>
-      <p className="mt-2 text-text-muted">{desc}</p>
-    </div>
-  );
 }
