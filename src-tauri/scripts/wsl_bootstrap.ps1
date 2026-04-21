@@ -34,9 +34,31 @@ function Enable-WSLFeatures {
 }
 
 function Install-WSLCore {
-    Info "调用 wsl --install --no-distribution"
-    wsl.exe --install --no-distribution 2>&1 | ForEach-Object { Write-Host $_ }
-    wsl.exe --set-default-version 2 2>&1 | ForEach-Object { Write-Host $_ }
+    if ($UseCN) {
+        Info "国内模式：下载并安装 WSL 内核更新包"
+        # 微软官方 WSL2 内核更新包（国内可直连）
+        $kernelUrl = "https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi"
+        $kernelMsi = Join-Path $env:TEMP "wsl_update_x64.msi"
+        if (-not (Test-Path $kernelMsi)) {
+            Info "下载 WSL2 内核: $kernelUrl"
+            $ProgressPreference = "SilentlyContinue"
+            try {
+                Invoke-WebRequest -Uri $kernelUrl -OutFile $kernelMsi -TimeoutSec 60
+            } catch {
+                Warn "下载 WSL 内核失败，尝试继续..."
+            }
+        }
+        if (Test-Path $kernelMsi) {
+            Info "安装 WSL2 内核更新包"
+            Start-Process msiexec.exe -ArgumentList "/i", $kernelMsi, "/quiet", "/norestart" -Wait -NoNewWindow
+            Ok "WSL2 内核安装完成"
+        }
+        wsl.exe --set-default-version 2 2>&1 | ForEach-Object { Write-Host $_ }
+    } else {
+        Info "调用 wsl --install --no-distribution"
+        wsl.exe --install --no-distribution 2>&1 | ForEach-Object { Write-Host $_ }
+        wsl.exe --set-default-version 2 2>&1 | ForEach-Object { Write-Host $_ }
+    }
 }
 
 function Import-UbuntuOffline {
