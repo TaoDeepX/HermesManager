@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-bg text-text font-sans antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+  ::selection {
+    background: theme("colors.brand.soft");
+    color: theme("colors.text.DEFAULT");
+  }
+  /* Subtle scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2a3448;
+    border-radius: 8px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3a465e;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 h-10 text-sm font-medium
+      transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand
+      disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary {
+    @apply btn bg-brand text-black hover:bg-brand-hover active:bg-brand-pressed;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-text hover:bg-bg-muted;
+  }
+  .btn-outline {
+    @apply btn border border-border-strong text-text hover:bg-bg-muted;
+  }
+  .card {
+    @apply bg-bg-elevated border border-border-subtle rounded-xl shadow-card;
+  }
+  .input {
+    @apply w-full h-10 rounded-lg bg-bg-muted border border-border-subtle px-3 text-sm
+      placeholder:text-text-faint focus:outline-none focus:border-brand focus:shadow-glow
+      transition-colors;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 px-2 h-6 rounded-full text-xs font-medium
+      bg-bg-muted border border-border-subtle;
+  }
+}
