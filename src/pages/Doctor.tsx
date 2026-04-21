@@ -42,7 +42,9 @@ export default function Doctor({ onNext }: { onNext: () => void }) {
   }, []);
 
   const summary = report ? summarize(report.checks) : null;
-  const canProceed = summary ? summary.err === 0 : false;
+  // 只有"不可自动修复的错误"才阻止进入下一步
+  const blockingErrors = report?.checks.filter(c => c.level === "err" && !c.auto_fixable).length ?? 0;
+  const canProceed = summary ? blockingErrors === 0 : false;
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -98,7 +100,7 @@ export default function Doctor({ onNext }: { onNext: () => void }) {
             className="btn-primary h-11 px-6 text-sm"
             onClick={onNext}
             disabled={!canProceed}
-            title={canProceed ? "" : "请先修复上方的错误项"}
+            title={canProceed ? (summary?.err ? "可自动修复的问题将在安装阶段处理" : "") : "请先修复上方不可自动修复的错误项"}
           >
             下一步：选择模型 <ArrowRight size={16} />
           </button>
