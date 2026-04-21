@@ -3,6 +3,7 @@ import { Sparkles, ShieldCheck, Boxes, Rocket, ArrowRight } from "lucide-react";
 import { cn } from "./lib/cn";
 import Doctor from "./pages/Doctor";
 import Install from "./pages/Install";
+import ProviderPage, { type ProviderSelection } from "./pages/Provider";
 
 type Step = "welcome" | "doctor" | "provider" | "install" | "done";
 
@@ -15,6 +16,11 @@ const STEPS: { id: Step; label: string }[] = [
 
 export default function App() {
   const [step, setStep] = useState<Step>("welcome");
+  const [selection, setSelection] = useState<ProviderSelection | null>(null);
+
+  const envKv: [string, string][] = selection
+    ? buildEnvKv(selection)
+    : [];
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -24,11 +30,19 @@ export default function App() {
         <div className="flex-1 px-10 py-8 animate-fade-slide-in" key={step}>
           {step === "welcome" && <Welcome onStart={() => setStep("doctor")} />}
           {step === "doctor" && <Doctor onNext={() => setStep("provider")} />}
-          {step === "provider" && <Placeholder title="选择模型" desc="M5 开发中：卡片式 Provider 选择 + 获取 Key 链接 + 测试连接。" />}
+          {step === "provider" && (
+            <ProviderPage
+              onSkip={() => setStep("install")}
+              onConfirm={(sel) => {
+                setSelection(sel);
+                setStep("install");
+              }}
+            />
+          )}
           {step === "install" && (
             <Install
               useCN={true}
-              envKv={[]}
+              envKv={envKv}
               onDone={() => setStep("done")}
             />
           )}
@@ -129,6 +143,14 @@ function FeatureCard({ icon, title, desc }: { icon: React.ReactNode; title: stri
       <div className="mt-1 text-xs text-text-muted leading-relaxed">{desc}</div>
     </div>
   );
+}
+
+function buildEnvKv(sel: ProviderSelection): [string, string][] {
+  const kv: [string, string][] = [];
+  if (sel.provider.envKey && sel.apiKey) kv.push([sel.provider.envKey, sel.apiKey]);
+  if (sel.baseUrl) kv.push(["HERMES_BASE_URL", sel.baseUrl]);
+  if (sel.model) kv.push(["HERMES_MODEL", sel.model]);
+  return kv;
 }
 
 function Placeholder({ title, desc }: { title: string; desc: string }) {

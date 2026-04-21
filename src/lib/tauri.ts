@@ -22,3 +22,26 @@ export interface Report {
 export function detectEnvironment(): Promise<Report> {
   return invoke<Report>("detect_environment");
 }
+
+export interface TestRequest {
+  base_url: string;
+  api_key?: string;
+  model: string;
+  extra_headers?: [string, string][];
+}
+
+export interface TestResponse {
+  ok: boolean;
+  status: number;
+  latency_ms: number;
+  body_preview: string;
+  error: string | null;
+}
+
+export function testProvider(req: TestRequest): Promise<TestResponse> {
+  return invoke<TestResponse>("test_provider", { req });
+}
+
+export function openExternal(url: string): Promise<void> {
+  return invoke("open_external", { url });
+}
