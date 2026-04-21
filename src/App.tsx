@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sparkles, ShieldCheck, Boxes, Rocket, ArrowRight } from "lucide-react";
 import { cn } from "./lib/cn";
 import Doctor from "./pages/Doctor";
@@ -55,6 +55,10 @@ export default function App() {
 }
 
 function TitleBar() {
+  const [ver, setVer] = useState("");
+  useEffect(() => {
+    import("@tauri-apps/api/app").then((m) => m.getVersion()).then(setVer).catch(() => {});
+  }, []);
   return (
     <div className="h-12 px-5 flex items-center gap-3 border-b border-border-subtle bg-bg-elevated/60 backdrop-blur select-none">
       <div className="w-7 h-7 rounded-lg bg-brand flex items-center justify-center text-black font-bold">H</div>
@@ -62,7 +66,7 @@ function TitleBar() {
         <div className="text-sm font-semibold">HermesManager</div>
         <div className="text-[11px] text-text-faint">HermesAgent 一键安装器</div>
       </div>
-      <span className="chip text-text-muted">v0.1.0 · M1</span>
+      {ver && <span className="chip text-text-muted">v{ver}</span>}
     </div>
   );
 }
