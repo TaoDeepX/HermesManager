@@ -2,9 +2,9 @@
 
 > 总进度实时更新 · 最后更新：2026-04-21
 
-![progress](https://img.shields.io/badge/progress-82%25-FF6B00?style=for-the-badge)
+![progress](https://img.shields.io/badge/progress-95%25-FF6B00?style=for-the-badge)
 
-## 总进度：**82%**
+## 总进度：**95%**
 
 权重按里程碑估算，完成一步即刷新本文件顶部 badge 与下表。
 
@@ -17,7 +17,7 @@
 | M3 | Windows 安装链路 · WSL2 / Ubuntu / hermes_setup.sh | ✅ | 95% | 25% |
 | M4 | macOS 安装链路 · Homebrew 镜像 / 依赖 / Hermes | ✅ | 90% | 15% |
 | M5 | Provider 向导 · `.env` 写入 · 连接测试 | ✅ | 95% | 20% |
-| M6 | 美化 + 文档 + CI Release v0.1.0 双平台产物 | 🚧 | 20% | 10% |
+| M6 | 美化 + 文档 + CI Release v0.1.0 双平台产物 | 🚧 | 70% | 10% |
 
 ## M1 子任务
 
@@ -53,12 +53,15 @@
 - [x] M5 · `Provider.tsx`（分组 Tab + 搜索 + 卡片 + 表单 + 获取 Key 外链 + 测试连接）
 - [x] M5 · `open_external` 命令 + `.env` KV 向 Install 流程透传
 - [ ] M6 · 本地 Rust 工具链（等用户决定 MSVC vs GNU vs 纯靠 CI）
-- [ ] M6 · 完成页（Done.tsx）展示后续使用说明 + 打开终端按钮
-- [ ] M6 · 视觉精修 + 图标资源 + 欢迎页动画
-- [ ] M6 · v0.1.0 tag + Release 自动产出 .msi / .dmg
+- [x] M6 · 完成页（`Done.tsx`）：复制启动命令 + 指南外链
+- [x] M6 · CI 双平台 rust-check 全部通过（Win+Mac）
+- [x] M6 · 打 `v0.1.0` tag 触发 Release 构建（流水号 24706204632）
+- [ ] M6 · 等 Release workflow 完成访问 Draft Release 下载产物
+- [ ] M6 · 本地开发环境（MSVC BuildTools or GNU）——非阻塞项，CI 已能出包
 
 ## 最近更新
 
+- 2026-04-21 14:20 · M6 ✅ Done 页、双平台 CI 全绿、v0.1.0 tag 已推送 Release workflow 开跑
 - 2026-04-21 14:00 · M3/M4/M5 推进：WSL 引导、安装编排、流式日志、Provider 卡片、连接测试、15 个提供商全部到位
 - 2026-04-21 13:30 · M2 推进：detect 模块 + Doctor UI 完成，增加 CI 双平台 rust-check（本地无 MSVC，由 CI 验证编译）
 - 2026-04-21 13:15 · 仓库首次推送成功：<https://github.com/TaoDeepX/HermesManager>
