@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Sparkles, ShieldCheck, Boxes, Rocket, ArrowRight } from "lucide-react";
 import { cn } from "./lib/cn";
 import Doctor from "./pages/Doctor";
+import Install from "./pages/Install";
 
 type Step = "welcome" | "doctor" | "provider" | "install" | "done";
 
@@ -24,7 +25,13 @@ export default function App() {
           {step === "welcome" && <Welcome onStart={() => setStep("doctor")} />}
           {step === "doctor" && <Doctor onNext={() => setStep("provider")} />}
           {step === "provider" && <Placeholder title="选择模型" desc="M5 开发中：卡片式 Provider 选择 + 获取 Key 链接 + 测试连接。" />}
-          {step === "install" && <Placeholder title="一键安装" desc="M3/M4 开发中：流式日志与进度。" />}
+          {step === "install" && (
+            <Install
+              useCN={true}
+              envKv={[]}
+              onDone={() => setStep("done")}
+            />
+          )}
           {step === "done" && <Placeholder title="完成" desc="M6 开发中。" />}
         </div>
       </main>
