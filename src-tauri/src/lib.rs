@@ -14,6 +14,11 @@ fn detect_environment() -> detect::Report {
 }
 
 #[tauri::command]
+fn doctor_fix(req: detect::FixRequest) -> detect::FixResult {
+    detect::fix_check(&req)
+}
+
+#[tauri::command]
 async fn start_install(app: tauri::AppHandle, opts: install::InstallOptions) -> install::InstallResult {
     install::run(app, opts).await
 }
@@ -39,6 +44,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             detect_environment,
+            doctor_fix,
             start_install,
             test_provider,
             list_models,

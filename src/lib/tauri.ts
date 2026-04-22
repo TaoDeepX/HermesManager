@@ -23,6 +23,21 @@ export function detectEnvironment(): Promise<Report> {
   return invoke<Report>("detect_environment");
 }
 
+export interface FixRequest {
+  check_id: string;
+  use_cn: boolean;
+}
+
+export interface FixResult {
+  ok: boolean;
+  message: string;
+  needs_reboot: boolean;
+}
+
+export function fixCheck(req: FixRequest): Promise<FixResult> {
+  return invoke<FixResult>("doctor_fix", { req });
+}
+
 export interface TestRequest {
   base_url: string;
   api_key?: string;

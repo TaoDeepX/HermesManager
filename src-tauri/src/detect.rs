@@ -1,6 +1,7 @@
 //! 环境探测模块：跨平台收集系统信息与依赖状态，返回结构化数据给前端。
+//! 同时提供 `fix_check` 入口，对可自动修复的项执行实际修复操作。
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::process::Command;
 use std::time::{Duration, Instant};
 
@@ -66,7 +67,7 @@ pub fn run_all() -> Report {
         "pypi.tuna.tsinghua.edu.cn",
         "清华 PyPI 镜像",
     ));
-    checks.push(check_network("ghproxy.com", "ghproxy 加速节点"));
+    checks.push(check_network("bgithub.xyz", "GitHub 镜像加速"));
 
     // Hermes 自身是否已安装（可选）
     checks.push(check_hermes_installed());
@@ -448,6 +449,211 @@ fn check_hermes_installed() -> Check {
             value: "未安装".into(),
             hint: None,
             auto_fixable: false,
+        },
+    }
+}
+
+// ─── 自动修复 ───────────────────────────────────────────────────────
+
+#[derive(Deserialize, Debug)]
+pub struct FixRequest {
+    pub check_id: String,
+    pub use_cn: bool,
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct FixResult {
+    pub ok: bool,
+    pub message: String,
+    /// 修复后是否需要重启电脑才能生效
+    pub needs_reboot: bool,
+}
+
+fn fix_temp_dir() -> std::path::PathBuf {
+    let mut p = std::env::temp_dir();
+    p.push("hermesmanager");
+    let _ = std::fs::create_dir_all(&p);
+    p
+}
+
+/// 根据 check_id 执行对应的自动修复
+pub fn fix_check(req: &FixRequest) -> FixResult {
+    match req.check_id.as_str() {
+        #[cfg(target_os = "windows")]
+        "wsl" => fix_wsl_install_win(),
+        #[cfg(target_os = "windows")]
+        "wsl_distro" => fix_wsl_distro_win(req.use_cn),
+        #[cfg(target_os = "macos")]
+        "xcode_clt" => fix_xcode_clt_mac(),
+        #[cfg(target_os = "macos")]
+        "brew" => fix_brew_mac(req.use_cn),
+        _ => FixResult {
+            ok: false,
+            message: format!("该检测项 ({}) 不支持自动修复，将在安装阶段处理。", req.check_id),
+            needs_reboot: false,
+        },
+    }
+}
+
+/// Windows: 安装/启用 WSL2（需管理员权限，弹 UAC）
+#[cfg(target_os = "windows")]
+fn fix_wsl_install_win() -> FixResult {
+    let script = r#"
+$ErrorActionPreference = 'Stop'
+Write-Host '=== HermesManager: 安装 WSL2 ===' -ForegroundColor Cyan
+Write-Host ''
+try {
+    Write-Host '[1/2] 执行 wsl --install --no-distribution ...' -ForegroundColor Yellow
+    wsl --install --no-distribution
+    Write-Host '[2/2] 设置默认版本为 WSL2 ...' -ForegroundColor Yellow
+    wsl --set-default-version 2
+    Write-Host ''
+    Write-Host '✅ WSL 安装命令已执行。' -ForegroundColor Green
+    Write-Host '如果是首次安装，请重启电脑后再运行 HermesManager。' -ForegroundColor Yellow
+} catch {
+    Write-Host "❌ 执行出错: $_" -ForegroundColor Red
+}
+Write-Host ''
+Write-Host '按任意键关闭此窗口...'
+$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+"#;
+    run_elevated_ps1("fix_wsl.ps1", script, true)
+}
+
+/// Windows: 安装 WSL 发行版（需管理员权限）
+#[cfg(target_os = "windows")]
+fn fix_wsl_distro_win(use_cn: bool) -> FixResult {
+    if use_cn {
+        // 国内模式：先写入 wsl_bootstrap.ps1，再用 wrapper 脚本调用它
+        let bootstrap = include_str!("../scripts/wsl_bootstrap.ps1");
+        let bs_path = fix_temp_dir().join("wsl_bootstrap.ps1");
+        let _ = std::fs::write(&bs_path, bootstrap.replace("\r\n", "\n"));
+        let script = format!(
+            r#"
+$ErrorActionPreference = 'Stop'
+Write-Host '=== HermesManager: 安装 Ubuntu 22.04 (国内加速) ===' -ForegroundColor Cyan
+Write-Host ''
+try {{
+    powershell -NoProfile -ExecutionPolicy Bypass -File '{}'  -UseCN
+    Write-Host ''
+    Write-Host '✅ 发行版安装完成。' -ForegroundColor Green
+}} catch {{
+    Write-Host "❌ 执行出错: $_" -ForegroundColor Red
+}}
+Write-Host ''
+Write-Host '按任意键关闭此窗口...'
+$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+"#,
+            bs_path.to_string_lossy()
+        );
+        run_elevated_ps1("fix_distro.ps1", &script, false)
+    } else {
+        let script = r#"
+$ErrorActionPreference = 'Stop'
+Write-Host '=== HermesManager: 安装 Ubuntu 22.04 ===' -ForegroundColor Cyan
+Write-Host ''
+try {
+    wsl --install -d Ubuntu-22.04
+    Write-Host ''
+    Write-Host '✅ 发行版安装命令已执行。' -ForegroundColor Green
+} catch {
+    Write-Host "❌ 执行出错: $_" -ForegroundColor Red
+}
+Write-Host ''
+Write-Host '按任意键关闭此窗口...'
+$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+"#;
+        run_elevated_ps1("fix_distro.ps1", script, false)
+    }
+}
+
+/// 工具函数：写入 .ps1 到临时目录，然后以管理员权限运行
+#[cfg(target_os = "windows")]
+fn run_elevated_ps1(name: &str, content: &str, needs_reboot: bool) -> FixResult {
+    let path = fix_temp_dir().join(name);
+    if let Err(e) = std::fs::write(&path, content) {
+        return FixResult {
+            ok: false,
+            message: format!("写入修复脚本失败：{}", e),
+            needs_reboot: false,
+        };
+    }
+    // Start-Process -Verb RunAs 弹出 UAC 提权窗口，-Wait 等待执行完毕
+    let ps_cmd = format!(
+        "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File \"{}\"'",
+        path.to_string_lossy()
+    );
+    let result = Command::new("powershell")
+        .args(["-NoProfile", "-Command", &ps_cmd])
+        .output();
+    match result {
+        Ok(o) if o.status.success() => FixResult {
+            ok: true,
+            message: if needs_reboot {
+                "修复命令已执行。如果是首次安装 WSL，请重启电脑后再继续。".into()
+            } else {
+                "修复命令已执行，请点击「重新检测」查看结果。".into()
+            },
+            needs_reboot,
+        },
+        Ok(o) => {
+            let stderr = String::from_utf8_lossy(&o.stderr);
+            FixResult {
+                ok: false,
+                message: format!("修复失败（可能取消了管理员授权）：{}", stderr.chars().take(200).collect::<String>()),
+                needs_reboot: false,
+            }
+        }
+        Err(e) => FixResult {
+            ok: false,
+            message: format!("无法启动修复进程：{}", e),
+            needs_reboot: false,
+        },
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn fix_xcode_clt_mac() -> FixResult {
+    let result = Command::new("xcode-select").arg("--install").output();
+    match result {
+        Ok(_) => FixResult {
+            ok: true,
+            message: "已弹出 Xcode Command Line Tools 安装窗口，请在系统弹窗中点击「安装」。".into(),
+            needs_reboot: false,
+        },
+        Err(e) => FixResult {
+            ok: false,
+            message: format!("启动安装失败：{}", e),
+            needs_reboot: false,
+        },
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn fix_brew_mac(use_cn: bool) -> FixResult {
+    let cmd = if use_cn {
+        r#"export HOMEBREW_BOTTLE_DOMAIN=https://mirrors.tuna.tsinghua.edu.cn/homebrew-bottles && \
+           export HOMEBREW_BREW_GIT_REMOTE=https://mirrors.tuna.tsinghua.edu.cn/git/homebrew/brew.git && \
+           /bin/bash -c "$(curl -fsSL https://gitee.com/cunkai/HomebrewCN/raw/master/Homebrew.sh)""#
+    } else {
+        r#"/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)""#
+    };
+    let result = Command::new("bash").args(["-lc", cmd]).output();
+    match result {
+        Ok(o) if o.status.success() => FixResult {
+            ok: true,
+            message: "Homebrew 安装完成。".into(),
+            needs_reboot: false,
+        },
+        Ok(o) => FixResult {
+            ok: false,
+            message: format!("Homebrew 安装失败：{}", String::from_utf8_lossy(&o.stderr).chars().take(200).collect::<String>()),
+            needs_reboot: false,
+        },
+        Err(e) => FixResult {
+            ok: false,
+            message: format!("启动安装失败：{}", e),
+            needs_reboot: false,
         },
     }
 }

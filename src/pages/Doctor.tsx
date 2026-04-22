@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   CheckCircle2,
   AlertTriangle,
@@ -8,8 +8,9 @@ import {
   RefreshCw,
   ArrowRight,
   Wrench,
+  RotateCw,
 } from "lucide-react";
-import { detectEnvironment, type Check, type Report, type Level } from "../lib/tauri";
+import { detectEnvironment, fixCheck, type Check, type FixResult, type Report, type Level } from "../lib/tauri";
 import { cn } from "../lib/cn";
 
 const LEVEL_META: Record<Level, { icon: React.ElementType; color: string; bg: string }> = {
@@ -23,8 +24,10 @@ export default function Doctor({ onNext }: { onNext: () => void }) {
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [fixingId, setFixingId] = useState<string | null>(null);
+  const [fixResults, setFixResults] = useState<Record<string, FixResult>>({});
 
-  const scan = async () => {
+  const scan = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -35,11 +38,35 @@ export default function Doctor({ onNext }: { onNext: () => void }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     scan();
-  }, []);
+  }, [scan]);
+
+  const handleFix = useCallback(async (checkId: string) => {
+    setFixingId(checkId);
+    setFixResults((prev) => {
+      const next = { ...prev };
+      delete next[checkId];
+      return next;
+    });
+    try {
+      const result = await fixCheck({ check_id: checkId, use_cn: true });
+      setFixResults((prev) => ({ ...prev, [checkId]: result }));
+      // 修复成功后自动重新扫描
+      if (result.ok && !result.needs_reboot) {
+        setTimeout(() => scan(), 800);
+      }
+    } catch (e) {
+      setFixResults((prev) => ({
+        ...prev,
+        [checkId]: { ok: false, message: String(e), needs_reboot: false },
+      }));
+    } finally {
+      setFixingId(null);
+    }
+  }, [scan]);
 
   const summary = report ? summarize(report.checks) : null;
   // 只有"不可自动修复的错误"才阻止进入下一步
@@ -58,7 +85,7 @@ export default function Doctor({ onNext }: { onNext: () => void }) {
         <button
           className="btn-outline text-sm"
           onClick={scan}
-          disabled={loading}
+          disabled={loading || fixingId !== null}
         >
           {loading ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
           重新检测
@@ -87,7 +114,14 @@ export default function Doctor({ onNext }: { onNext: () => void }) {
           </div>
         )}
         {report?.checks.map((c) => (
-          <CheckRow key={c.id} check={c} />
+          <CheckRow
+            key={c.id}
+            check={c}
+            fixing={fixingId === c.id}
+            fixResult={fixResults[c.id]}
+            onFix={() => handleFix(c.id)}
+            disabled={fixingId !== null}
+          />
         ))}
       </div>
 
@@ -139,7 +173,19 @@ function StatCard({
   );
 }
 
-function CheckRow({ check }: { check: Check }) {
+function CheckRow({
+  check,
+  fixing,
+  fixResult,
+  onFix,
+  disabled,
+}: {
+  check: Check;
+  fixing: boolean;
+  fixResult?: FixResult;
+  onFix: () => void;
+  disabled: boolean;
+}) {
   const m = LEVEL_META[check.level];
   return (
     <div className="card p-4 flex items-start gap-4 animate-slide-up">
@@ -154,10 +200,40 @@ function CheckRow({ check }: { check: Check }) {
         {check.hint && (
           <div className="mt-1 text-xs text-text-muted leading-relaxed">{check.hint}</div>
         )}
+        {fixResult && (
+          <div className={cn("mt-2 text-xs leading-relaxed px-3 py-2 rounded-lg",
+            fixResult.ok ? "bg-success/10 text-success" : "bg-error/10 text-error"
+          )}>
+            {fixResult.ok ? "✅ " : "❌ "}{fixResult.message}
+            {fixResult.needs_reboot && (
+              <div className="mt-1 font-medium text-warn">⚠ 请重启电脑后再继续操作。</div>
+            )}
+          </div>
+        )}
       </div>
       {check.auto_fixable && (
-        <button className="btn-outline h-8 px-3 text-xs shrink-0" title="在下一步安装阶段会自动修复">
-          <Wrench size={12} /> 可自动修复
+        <button
+          className={cn(
+            "h-8 px-3 text-xs shrink-0 flex items-center gap-1.5 rounded-lg border transition-colors",
+            fixing
+              ? "border-brand/30 text-brand bg-brand/5 cursor-wait"
+              : fixResult?.ok
+                ? "border-success/30 text-success bg-success/5"
+                : "border-border-subtle text-text hover:bg-bg-muted hover:border-brand/40 hover:text-brand cursor-pointer"
+          )}
+          onClick={onFix}
+          disabled={disabled || fixing || (fixResult?.ok ?? false)}
+          title={fixing ? "正在修复…" : fixResult?.ok ? "已修复" : "点击执行自动修复"}
+        >
+          {fixing ? (
+            <><Loader2 className="animate-spin" size={12} /> 修复中…</>
+          ) : fixResult?.ok ? (
+            <><CheckCircle2 size={12} /> 已修复</>
+          ) : fixResult && !fixResult.ok ? (
+            <><RotateCw size={12} /> 重试修复</>
+          ) : (
+            <><Wrench size={12} /> 一键修复</>
+          )}
         </button>
       )}
     </div>
