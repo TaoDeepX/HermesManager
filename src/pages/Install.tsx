@@ -38,10 +38,16 @@ const LEVEL_COLOR: Record<LogLevel, string> = {
 export default function Install({
   useCN,
   envKv,
+  hermesProvider,
+  hermesBaseUrl,
+  hermesModel,
   onDone,
 }: {
   useCN: boolean;
   envKv: [string, string][];
+  hermesProvider?: string;
+  hermesBaseUrl?: string;
+  hermesModel?: string;
   onDone: () => void;
 }) {
   const [logs, setLogs] = useState<LogEvent[]>([]);
@@ -80,7 +86,13 @@ export default function Install({
     setPercent(0);
     try {
       const r = await invoke<InstallResult>("start_install", {
-        opts: { use_cn: useCN, env_kv: envKv },
+        opts: {
+          use_cn: useCN,
+          env_kv: envKv,
+          hermes_provider: hermesProvider ?? null,
+          hermes_base_url: hermesBaseUrl ?? null,
+          hermes_model: hermesModel ?? null,
+        },
       });
       setResult(r);
     } catch (e) {

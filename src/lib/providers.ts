@@ -18,6 +18,8 @@ export interface Provider {
   needsProxy?: boolean;
   /** 是否无需 API Key */
   noKey?: boolean;
+  /** hermes config.yaml 中的 provider 名（如 "alibaba"、"deepseek"） */
+  hermesProvider?: string;
 }
 
 export const PROVIDERS: Provider[] = [
@@ -30,6 +32,7 @@ export const PROVIDERS: Provider[] = [
     apiKeyUrl: "https://bailian.console.aliyun.com/?apiKey=1",
     baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     envKey: "DASHSCOPE_API_KEY",
+    hermesProvider: "alibaba",
     defaultModel: "qwen3-coder-plus",
     suggestedModels: ["qwen3-coder-plus", "qwen-max", "qwen-plus", "qwen-turbo"],
   },
@@ -41,6 +44,7 @@ export const PROVIDERS: Provider[] = [
     apiKeyUrl: "https://platform.deepseek.com/api_keys",
     baseUrl: "https://api.deepseek.com/v1",
     envKey: "DEEPSEEK_API_KEY",
+    hermesProvider: "deepseek",
     defaultModel: "deepseek-chat",
     suggestedModels: ["deepseek-chat", "deepseek-reasoner"],
   },
@@ -52,6 +56,7 @@ export const PROVIDERS: Provider[] = [
     apiKeyUrl: "https://platform.moonshot.cn/console/api-keys",
     baseUrl: "https://api.moonshot.cn/v1",
     envKey: "MOONSHOT_API_KEY",
+    hermesProvider: "kimi-cn",
     defaultModel: "kimi-k2-0905-preview",
     suggestedModels: ["kimi-k2-0905-preview", "moonshot-v1-128k", "moonshot-v1-32k"],
   },
@@ -64,6 +69,7 @@ export const PROVIDERS: Provider[] = [
       "https://platform.minimaxi.com/user-center/basic-information/interface-key",
     baseUrl: "https://api.minimaxi.chat/v1",
     envKey: "MINIMAX_API_KEY",
+    hermesProvider: "minimax-cn",
     defaultModel: "MiniMax-M1",
   },
   {
@@ -74,6 +80,7 @@ export const PROVIDERS: Provider[] = [
     apiKeyUrl: "https://open.bigmodel.cn/usercenter/apikeys",
     baseUrl: "https://open.bigmodel.cn/api/paas/v4",
     envKey: "ZAI_API_KEY",
+    hermesProvider: "zai",
     defaultModel: "glm-4-plus",
     suggestedModels: ["glm-4-plus", "glm-4.6"],
   },
@@ -113,6 +120,7 @@ export const PROVIDERS: Provider[] = [
     apiKeyUrl: "https://openrouter.ai/keys",
     baseUrl: "https://openrouter.ai/api/v1",
     envKey: "OPENROUTER_API_KEY",
+    hermesProvider: "openrouter",
     needsProxy: true,
     defaultModel: "anthropic/claude-3.7-sonnet",
   },

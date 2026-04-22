@@ -11,8 +11,14 @@ HM_USE_CN="${HM_USE_CN:-1}"
 HM_PYTHON="${HM_PYTHON:-3.11}"
 HM_EXTRAS="${HM_EXTRAS:-all}"
 
+# GitHub 国内镜像候选列表（按可用性排序，会逐个尝试）
+CN_GIT_MIRRORS=(
+    "https://bgithub.xyz"
+    "https://gh-proxy.com/https://github.com"
+    "https://github.com"  # 直连兜底
+)
+
 if [ "$HM_USE_CN" = "1" ]; then
-    : "${HM_REPO_URL:=https://ghproxy.com/https://github.com/NousResearch/hermes-agent.git}"
     export UV_DEFAULT_INDEX="${UV_DEFAULT_INDEX:-https://pypi.tuna.tsinghua.edu.cn/simple}"
     export PIP_INDEX_URL="$UV_DEFAULT_INDEX"
 else
@@ -68,9 +74,7 @@ install_uv() {
         return
     fi
     log "安装 uv"
-    if [ "$HM_USE_CN" = "1" ]; then
-        export UV_INSTALLER_GITHUB_BASE_URL="https://ghproxy.com/https://github.com"
-    fi
+    # uv 官方安装脚本走 GitHub Releases CDN，国内通常可直连，无需代理
     curl -LsSf https://astral.sh/uv/install.sh | sh
     export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
     ok "uv 安装完成：$(uv --version || echo unknown)"
@@ -108,16 +112,40 @@ clone_hermes() {
         git -C "$target" pull --recurse-submodules --ff-only || true
         return
     fi
-    log "克隆 hermes-agent 仓库"
-    git clone --recurse-submodules "$HM_REPO_URL" "$target"
-    ok "克隆完成：$target"
+    # 如果用户已指定 HM_REPO_URL，直接使用
+    if [ -n "${HM_REPO_URL:-}" ]; then
+        log "克隆 hermes-agent 仓库：$HM_REPO_URL"
+        git clone --recurse-submodules "$HM_REPO_URL" "$target"
+        ok "克隆完成：$target"
+        return
+    fi
+    # 国内模式：逐个尝试镜像
+    if [ "$HM_USE_CN" = "1" ]; then
+        local repo_path="NousResearch/hermes-agent.git"
+        for mirror in "${CN_GIT_MIRRORS[@]}"; do
+            local url="${mirror}/${repo_path}"
+            log "尝试镜像：$url"
+            if git clone --recurse-submodules --timeout=30 "$url" "$target" 2>&1; then
+                ok "克隆完成（镜像：$mirror）"
+                return
+            fi
+            warn "镜像 $mirror 失败，尝试下一个…"
+            rm -rf "$target" 2>/dev/null || true
+        done
+        err "所有镜像均失败，请检查网络或手动克隆仓库到 $target"
+        exit 1
+    else
+        log "克隆 hermes-agent 仓库"
+        git clone --recurse-submodules "https://github.com/NousResearch/hermes-agent.git" "$target"
+        ok "克隆完成：$target"
+    fi
 }
 
 install_python_deps() {
     local repo="$HOME/hermes-agent"
     cd "$repo"
     log "创建虚拟环境 (Python $HM_PYTHON)"
-    uv venv venv --python "$HM_PYTHON"
+    uv venv venv --python "$HM_PYTHON" --allow-existing
     export VIRTUAL_ENV="$repo/venv"
     log "安装 Python 依赖：[$HM_EXTRAS]"
     uv pip install -e ".[$HM_EXTRAS]"

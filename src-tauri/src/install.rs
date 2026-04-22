@@ -11,6 +11,12 @@ pub struct InstallOptions {
     pub use_cn: bool,
     /// 可选：预先配置的 provider env 写入 ~/.hermes/.env
     pub env_kv: Option<Vec<(String, String)>>,
+    /// hermes config.yaml 中的 provider 名（如 "alibaba"、"deepseek"）
+    pub hermes_provider: Option<String>,
+    /// hermes config.yaml 中的 base_url
+    pub hermes_base_url: Option<String>,
+    /// hermes config.yaml 中的默认模型名
+    pub hermes_model: Option<String>,
 }
 
 #[derive(Serialize, Debug, Clone)]

@@ -44,6 +44,9 @@ export default function App() {
             <Install
               useCN={true}
               envKv={envKv}
+              hermesProvider={selection?.provider.hermesProvider}
+              hermesBaseUrl={selection?.baseUrl}
+              hermesModel={selection?.model}
               onDone={() => setStep("done")}
             />
           )}
@@ -119,7 +122,7 @@ function Welcome({ onStart }: { onStart: () => void }) {
 
       <div className="mt-8 grid grid-cols-3 gap-4">
         <FeatureCard icon={<ShieldCheck size={18} />} title="全自动体检" desc="系统版本 / 虚拟化 / WSL / 网络 / 依赖全部一键检测。" />
-        <FeatureCard icon={<Boxes size={18} />} title="国内加速" desc="内置清华 / ghproxy / npmmirror 镜像，无需科学上网。" />
+        <FeatureCard icon={<Boxes size={18} />} title="国内加速" desc="内置清华 / npmmirror 等国内镜像，自动多级 fallback，无需科学上网。" />
         <FeatureCard icon={<Rocket size={18} />} title="一键安装" desc="Windows(WSL2) 与 macOS(Homebrew) 双平台自动适配。" />
       </div>
 
@@ -152,8 +155,8 @@ function FeatureCard({ icon, title, desc }: { icon: React.ReactNode; title: stri
 
 function buildEnvKv(sel: ProviderSelection): [string, string][] {
   const kv: [string, string][] = [];
+  // 只写 provider 专属的 API Key 到 .env（如 DASHSCOPE_API_KEY、DEEPSEEK_API_KEY）
+  // base_url 和 model 通过 config.yaml 配置（由 install_win.rs Step 5 处理）
   if (sel.provider.envKey && sel.apiKey) kv.push([sel.provider.envKey, sel.apiKey]);
-  if (sel.baseUrl) kv.push(["HERMES_BASE_URL", sel.baseUrl]);
-  if (sel.model) kv.push(["HERMES_MODEL", sel.model]);
   return kv;
 }

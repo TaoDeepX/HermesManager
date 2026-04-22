@@ -57,5 +57,47 @@ pub async fn install(app: AppHandle, job_id: &str, opts: &InstallOptions) -> Res
         return Err(anyhow!("HermesAgent 安装失败（退出码 {}）", code));
     }
 
+    // Step 3: 写入 .env（如有）— 幂等写法
+    if let Some(kv) = &opts.env_kv {
+        emit_progress(&app, job_id, "env", 85, "写入 API Key 到 ~/.hermes/.env");
+        for (k, v) in kv {
+            let cmd = format!(
+                "mkdir -p ~/.hermes && touch ~/.hermes/.env && \
+                 sed -i '' '/^{}=/d' ~/.hermes/.env && \
+                 echo '{}={}' >> ~/.hermes/.env",
+                k, k, v
+            );
+            let _ = run_streaming(&app, job_id, "env", "bash", &["-lc", &cmd], None).await?;
+        }
+    }
+
+    // Step 4: 配置 config.yaml（provider / base_url / model）
+    if opts.hermes_provider.is_some() || opts.hermes_base_url.is_some() || opts.hermes_model.is_some() {
+        emit_progress(&app, job_id, "config", 92, "配置 HermesAgent provider");
+        let mut sed_cmds = Vec::new();
+        if let Some(provider) = &opts.hermes_provider {
+            sed_cmds.push(format!(
+                "sed -i '' 's|^  provider: .*|  provider: \"{}\"|' ~/.hermes/config.yaml",
+                provider
+            ));
+        }
+        if let Some(base_url) = &opts.hermes_base_url {
+            sed_cmds.push(format!(
+                "sed -i '' 's|^  base_url: .*|  base_url: \"{}\"|' ~/.hermes/config.yaml",
+                base_url
+            ));
+        }
+        if let Some(model) = &opts.hermes_model {
+            sed_cmds.push(format!(
+                "sed -i '' 's|^  default: .*|  default: \"{}\"|' ~/.hermes/config.yaml",
+                model
+            ));
+        }
+        let full_cmd = sed_cmds.join(" && ");
+        emit_log(&app, job_id, "config", LogLevel::Info,
+            "写入 provider 配置到 config.yaml");
+        let _ = run_streaming(&app, job_id, "config", "bash", &["-lc", &full_cmd], None).await?;
+    }
+
     Ok(())
 }

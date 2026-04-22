@@ -95,30 +95,56 @@ r#"WSL 引导失败（退出码 {}）。
         return Err(anyhow!("HermesAgent 安装失败（退出码 {}）", code));
     }
 
-    // Step 4: 写入 .env（如有）
+    // Step 4: 写入 .env（如有）— 使用幂等写法避免重复追加
     if let Some(kv) = &opts.env_kv {
-        emit_progress(&app, job_id, "env", 90, "写入 API Key 到 ~/.hermes/.env");
-        let mut lines = String::new();
+        emit_progress(&app, job_id, "env", 85, "写入 API Key 到 ~/.hermes/.env");
+        // 逐条写入，先删除旧的同名 key 再追加
         for (k, v) in kv {
-            lines.push_str(&format!("{}={}\n", k, v));
+            let cmd = format!(
+                "mkdir -p ~/.hermes && touch ~/.hermes/.env && \
+                 sed -i '/^{}=/d' ~/.hermes/.env && \
+                 echo '{}={}' >> ~/.hermes/.env",
+                k, k, v
+            );
+            let _ = run_streaming(
+                &app, job_id, "env", "wsl.exe",
+                &["--", "bash", "-lc", &cmd], None,
+            ).await?;
         }
-        let env_cmd = format!(
-            "mkdir -p ~/.hermes && printf '%s' \"$HM_ENV_CONTENT\" >> ~/.hermes/.env"
-        );
+    }
+
+    // Step 5: 配置 config.yaml（provider / base_url / model）
+    if opts.hermes_provider.is_some() || opts.hermes_base_url.is_some() || opts.hermes_model.is_some() {
+        emit_progress(&app, job_id, "config", 92, "配置 HermesAgent provider");
+        let mut sed_cmds = Vec::new();
+        if let Some(provider) = &opts.hermes_provider {
+            // 替换 config.yaml 中的 provider 行（仅匹配顶层非注释行）
+            sed_cmds.push(format!(
+                "sed -i 's|^  provider: .*|  provider: \"{}\"|' ~/.hermes/config.yaml",
+                provider
+            ));
+        }
+        if let Some(base_url) = &opts.hermes_base_url {
+            // 替换 config.yaml 中的 base_url 行
+            sed_cmds.push(format!(
+                "sed -i 's|^  base_url: .*|  base_url: \"{}\"|' ~/.hermes/config.yaml",
+                base_url
+            ));
+        }
+        if let Some(model) = &opts.hermes_model {
+            // 替换 config.yaml 中的 default 模型行
+            sed_cmds.push(format!(
+                "sed -i 's|^  default: .*|  default: \"{}\"|' ~/.hermes/config.yaml",
+                model
+            ));
+        }
+        let full_cmd = sed_cmds.join(" && ");
+        emit_log(&app, job_id, "config", LogLevel::Info,
+            format!("写入 provider 配置到 config.yaml"));
         let _ = run_streaming(
-            &app,
-            job_id,
-            "env",
-            "wsl.exe",
-            &[
-                "--",
-                "bash",
-                "-lc",
-                &format!("HM_ENV_CONTENT={} {}", shell_escape(&lines), env_cmd),
-            ],
-            None,
-        )
-        .await?;
+            &app, job_id, "config", "wsl.exe",
+            &["--", "bash", "-lc", &full_cmd], None,
+        ).await?;
     }
 
     Ok(())
@@ -135,15 +161,3 @@ fn windows_path_to_wsl(p: &std::path::Path) -> Result<String> {
     }
 }
 
-fn shell_escape(s: &str) -> String {
-    let mut out = String::from("'");
-    for ch in s.chars() {
-        if ch == '\'' {
-            out.push_str("'\\''");
-        } else {
-            out.push(ch);
-        }
-    }
-    out.push('\'');
-    out
-}
