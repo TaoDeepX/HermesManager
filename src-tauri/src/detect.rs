@@ -219,29 +219,43 @@ fn check_virtualization_win() -> Check {
 
 #[cfg(target_os = "windows")]
 fn check_wsl_win() -> Check {
-    let out = Command::new("wsl").args(["--status"]).output();
-    match out {
-        Ok(o) if o.status.success() => {
-            // wsl --status 输出是 UTF-16，需解码
-            let text = decode_win_output(&o.stdout);
-            let version_2 = text.contains("2") && text.to_lowercase().contains("default version");
-            Check {
-                id: "wsl",
-                label: "WSL",
-                level: if version_2 { Level::Ok } else { Level::Warn },
-                value: if version_2 { "WSL2 已启用".into() } else { "已安装，但默认版本可能不是 2".into() },
-                hint: if version_2 { None } else { Some("建议执行 `wsl --set-default-version 2`。".into()) },
-                auto_fixable: !version_2,
-            }
+    // 多种方式探测 WSL 是否已安装
+    let version_out = Command::new("wsl").args(["--version"]).output();
+    let status_out = Command::new("wsl").args(["--status"]).output();
+
+    let wsl_installed = version_out.as_ref().map(|o| o.status.success()).unwrap_or(false)
+        || status_out.as_ref().map(|o| o.status.success()).unwrap_or(false);
+
+    if wsl_installed {
+        // 检查默认版本是否为 2
+        let version_text = version_out.as_ref()
+            .map(|o| decode_win_output(&o.stdout))
+            .unwrap_or_default();
+        let status_text = status_out.as_ref()
+            .map(|o| decode_win_output(&o.stdout))
+            .unwrap_or_default();
+        let combined = format!("{} {}", version_text, status_text).to_lowercase();
+        // "default version: 2" 或 "默认版本: 2" 或 "WSLg" (只有 WSL2 有)
+        let is_v2 = combined.contains("default version: 2")
+            || combined.contains("default version : 2")
+            || combined.contains("wslg");
+        Check {
+            id: "wsl",
+            label: "WSL",
+            level: if is_v2 { Level::Ok } else { Level::Warn },
+            value: if is_v2 { "WSL2 已启用".into() } else { "已安装（建议设为默认版本 2）".into() },
+            hint: if is_v2 { None } else { Some("建议执行 `wsl --set-default-version 2`。".into()) },
+            auto_fixable: !is_v2,
         }
-        _ => Check {
+    } else {
+        Check {
             id: "wsl",
             label: "WSL",
             level: Level::Err,
             value: "未安装".into(),
             hint: Some("需要 WSL2 才能运行 HermesAgent；安装器可一键修复。".into()),
             auto_fixable: true,
-        },
+        }
     }
 }
 
@@ -500,21 +514,21 @@ pub fn fix_check(req: &FixRequest) -> FixResult {
 fn fix_wsl_install_win() -> FixResult {
     let script = r#"
 $ErrorActionPreference = 'Stop'
-Write-Host '=== HermesManager: 安装 WSL2 ===' -ForegroundColor Cyan
+Write-Host '=== HermesManager: Install WSL2 ===' -ForegroundColor Cyan
 Write-Host ''
 try {
-    Write-Host '[1/2] 执行 wsl --install --no-distribution ...' -ForegroundColor Yellow
+    Write-Host '[1/2] Running wsl --install --no-distribution ...' -ForegroundColor Yellow
     wsl --install --no-distribution
-    Write-Host '[2/2] 设置默认版本为 WSL2 ...' -ForegroundColor Yellow
+    Write-Host '[2/2] Setting default version to WSL2 ...' -ForegroundColor Yellow
     wsl --set-default-version 2
     Write-Host ''
-    Write-Host '✅ WSL 安装命令已执行。' -ForegroundColor Green
-    Write-Host '如果是首次安装，请重启电脑后再运行 HermesManager。' -ForegroundColor Yellow
+    Write-Host 'WSL install command executed.' -ForegroundColor Green
+    Write-Host 'If this is first install, please reboot and re-run HermesManager.' -ForegroundColor Yellow
 } catch {
-    Write-Host "❌ 执行出错: $_" -ForegroundColor Red
+    Write-Host "ERROR: $_" -ForegroundColor Red
 }
 Write-Host ''
-Write-Host '按任意键关闭此窗口...'
+Write-Host 'Press any key to close ...'
 $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
 "#;
     run_elevated_ps1("fix_wsl.ps1", script, true)
@@ -527,21 +541,24 @@ fn fix_wsl_distro_win(use_cn: bool) -> FixResult {
         // 国内模式：先写入 wsl_bootstrap.ps1，再用 wrapper 脚本调用它
         let bootstrap = include_str!("../scripts/wsl_bootstrap.ps1");
         let bs_path = fix_temp_dir().join("wsl_bootstrap.ps1");
-        let _ = std::fs::write(&bs_path, bootstrap.replace("\r\n", "\n"));
+        let mut bs_data = Vec::with_capacity(3 + bootstrap.len());
+        bs_data.extend_from_slice(b"\xEF\xBB\xBF");
+        bs_data.extend_from_slice(bootstrap.replace("\r\n", "\n").as_bytes());
+        let _ = std::fs::write(&bs_path, bs_data);
         let script = format!(
             r#"
 $ErrorActionPreference = 'Stop'
-Write-Host '=== HermesManager: 安装 Ubuntu 22.04 (国内加速) ===' -ForegroundColor Cyan
+Write-Host '=== HermesManager: Install Ubuntu 22.04 (CN mirror) ===' -ForegroundColor Cyan
 Write-Host ''
 try {{
     powershell -NoProfile -ExecutionPolicy Bypass -File '{}'  -UseCN
     Write-Host ''
-    Write-Host '✅ 发行版安装完成。' -ForegroundColor Green
+    Write-Host 'Distro install done.' -ForegroundColor Green
 }} catch {{
-    Write-Host "❌ 执行出错: $_" -ForegroundColor Red
+    Write-Host "ERROR: $_" -ForegroundColor Red
 }}
 Write-Host ''
-Write-Host '按任意键关闭此窗口...'
+Write-Host 'Press any key to close ...'
 $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
 "#,
             bs_path.to_string_lossy()
@@ -550,17 +567,17 @@ $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
     } else {
         let script = r#"
 $ErrorActionPreference = 'Stop'
-Write-Host '=== HermesManager: 安装 Ubuntu 22.04 ===' -ForegroundColor Cyan
+Write-Host '=== HermesManager: Install Ubuntu 22.04 ===' -ForegroundColor Cyan
 Write-Host ''
 try {
     wsl --install -d Ubuntu-22.04
     Write-Host ''
-    Write-Host '✅ 发行版安装命令已执行。' -ForegroundColor Green
+    Write-Host 'Distro install command executed.' -ForegroundColor Green
 } catch {
-    Write-Host "❌ 执行出错: $_" -ForegroundColor Red
+    Write-Host "ERROR: $_" -ForegroundColor Red
 }
 Write-Host ''
-Write-Host '按任意键关闭此窗口...'
+Write-Host 'Press any key to close ...'
 $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
 "#;
         run_elevated_ps1("fix_distro.ps1", script, false)
@@ -571,7 +588,11 @@ $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
 #[cfg(target_os = "windows")]
 fn run_elevated_ps1(name: &str, content: &str, needs_reboot: bool) -> FixResult {
     let path = fix_temp_dir().join(name);
-    if let Err(e) = std::fs::write(&path, content) {
+    // UTF-8 BOM 确保中文 Windows 下 PowerShell 正确识别编码
+    let mut data = Vec::with_capacity(3 + content.len());
+    data.extend_from_slice(b"\xEF\xBB\xBF");
+    data.extend_from_slice(content.as_bytes());
+    if let Err(e) = std::fs::write(&path, data) {
         return FixResult {
             ok: false,
             message: format!("写入修复脚本失败：{}", e),

@@ -12,16 +12,51 @@ $ErrorActionPreference = "Stop"
 function Info($m) { Write-Host "[wsl-bootstrap] $m" -ForegroundColor Cyan }
 function Ok($m)   { Write-Host "[  ok  ] $m" -ForegroundColor Green }
 function Warn($m) { Write-Host "[ warn ] $m" -ForegroundColor Yellow }
+function Err($m)  { Write-Host "[ ERROR ] $m" -ForegroundColor Red }
 
-function Test-WSL {
-    try {
-        $null = wsl.exe --status 2>&1
-        return $LASTEXITCODE -eq 0
-    } catch { return $false }
+# ---------- 工具函数 ----------
+
+function Test-IsAdmin {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Test-WSL {
+    # 多种方式检测 WSL 是否已安装并可用
+    try {
+        $null = wsl.exe --version 2>&1
+        if ($LASTEXITCODE -eq 0) { return $true }
+    } catch {}
+    try {
+        $null = wsl.exe --status 2>&1
+        if ($LASTEXITCODE -eq 0) { return $true }
+    } catch {}
+    try {
+        $null = wsl.exe -l 2>&1
+        if ($LASTEXITCODE -eq 0) { return $true }
+    } catch {}
+    return $false
+}
+
+function Get-InstalledDistros {
+    try {
+        $raw = wsl.exe -l -q 2>$null
+        $list = $raw | ForEach-Object { ($_ -replace '\x00','').Trim() } | Where-Object { $_ -ne '' }
+        return @($list)
+    } catch {
+        return @()
+    }
+}
+
+# ---------- 安装函数 ----------
+
 function Enable-WSLFeatures {
-    Info "启用 WSL 和 VirtualMachinePlatform 功能"
+    if (-not (Test-IsAdmin)) {
+        Err "WSL feature not enabled and no admin privileges. Use Doctor fix (elevated) first."
+        exit 1
+    }
+    Info "Enabling WSL and VirtualMachinePlatform features"
     $f1 = Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -ErrorAction SilentlyContinue
     if ($f1 -and $f1.State -ne "Enabled") {
         Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -All -NoRestart | Out-Null
@@ -30,32 +65,31 @@ function Enable-WSLFeatures {
     if ($f2 -and $f2.State -ne "Enabled") {
         Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -All -NoRestart | Out-Null
     }
-    Ok "WSL 功能已启用（如刚启用可能需要重启）"
+    Ok "WSL features enabled (reboot may be required if first time)"
 }
 
 function Install-WSLCore {
     if ($UseCN) {
-        Info "国内模式：下载并安装 WSL 内核更新包"
-        # 微软官方 WSL2 内核更新包（国内可直连）
+        Info "CN mode: downloading WSL2 kernel update"
         $kernelUrl = "https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi"
         $kernelMsi = Join-Path $env:TEMP "wsl_update_x64.msi"
         if (-not (Test-Path $kernelMsi)) {
-            Info "下载 WSL2 内核: $kernelUrl"
+            Info "Downloading WSL2 kernel: $kernelUrl"
             $ProgressPreference = "SilentlyContinue"
             try {
                 Invoke-WebRequest -Uri $kernelUrl -OutFile $kernelMsi -TimeoutSec 60
             } catch {
-                Warn "下载 WSL 内核失败，尝试继续..."
+                Warn "WSL kernel download failed, trying to continue..."
             }
         }
         if (Test-Path $kernelMsi) {
-            Info "安装 WSL2 内核更新包"
+            Info "Installing WSL2 kernel update"
             Start-Process msiexec.exe -ArgumentList "/i", $kernelMsi, "/quiet", "/norestart" -Wait -NoNewWindow
-            Ok "WSL2 内核安装完成"
+            Ok "WSL2 kernel installed"
         }
         wsl.exe --set-default-version 2 2>&1 | ForEach-Object { Write-Host $_ }
     } else {
-        Info "调用 wsl --install --no-distribution"
+        Info "Running wsl --install --no-distribution"
         wsl.exe --install --no-distribution 2>&1 | ForEach-Object { Write-Host $_ }
         wsl.exe --set-default-version 2 2>&1 | ForEach-Object { Write-Host $_ }
     }
@@ -67,38 +101,62 @@ function Import-UbuntuOffline {
     New-Item -ItemType Directory -Force $dest | Out-Null
     $tar = Join-Path $env:TEMP "$Name.rootfs.tar.gz"
     if (-not (Test-Path $tar)) {
-        Info "下载 rootfs: $RootfsUrl"
+        Info "Downloading rootfs: $RootfsUrl"
         $ProgressPreference = "SilentlyContinue"
         Invoke-WebRequest -Uri $RootfsUrl -OutFile $tar
     }
-    Info "导入 WSL 发行版：$Name"
+    Info "Importing WSL distro: $Name"
     wsl.exe --import $Name $dest $tar --version 2 2>&1 | ForEach-Object { Write-Host $_ }
-    Ok "导入完成：$Name -> $dest"
+    Ok "Import done: $Name -> $dest"
 }
 
 function Ensure-Distro {
-    # wsl.exe 输出 UTF-16 LE，含 \x00 空字符，必须清理后才能匹配
-    $existing = (wsl.exe -l -q 2>$null | ForEach-Object { ($_ -replace '\x00','').Trim() } | Where-Object { $_ -ne '' })
-    Info "已安装的发行版：$($existing -join ', ')"
+    $existing = Get-InstalledDistros
+    Info "Installed distros: $($existing -join ', ')"
     if ($existing -contains $DistroName) {
-        Ok "发行版已存在：$DistroName"
+        Ok "Distro already exists: $DistroName"
         return
     }
     if ($UseCN) {
         $url = "https://mirrors.tuna.tsinghua.edu.cn/ubuntu-cloud-images/wsl/jammy/current/ubuntu-jammy-wsl-amd64-ubuntu.rootfs.tar.gz"
         Import-UbuntuOffline -RootfsUrl $url -Name $DistroName
     } else {
-        Info "通过 Microsoft Store 安装：$DistroName"
+        Info "Installing via Microsoft Store: $DistroName"
         wsl.exe --install -d $DistroName --no-launch 2>&1 | ForEach-Object { Write-Host $_ }
     }
 }
 
-if (-not (Test-WSL)) {
-    Enable-WSLFeatures
-    Install-WSLCore
-    Warn "若首次启用 WSL，请重启电脑后重新运行安装器"
+# ---------- 主流程 ----------
+
+$wslReady = Test-WSL
+$distros = Get-InstalledDistros
+$hasDistro = ($distros.Count -gt 0)
+
+Info "WSL ready: $wslReady | Has distro: $hasDistro ($($distros -join ', '))"
+
+# 快速路径：WSL 和发行版都已就绪，直接成功
+if ($wslReady -and $hasDistro) {
+    Ok "WSL and distro already set up, skipping bootstrap"
+    try {
+        wsl.exe --set-default-version 2 2>&1 | Out-Null
+        wsl.exe --set-default $DistroName 2>&1 | Out-Null
+    } catch {}
+    Ok "WSL bootstrap done"
+    exit 0
 }
 
+# WSL 未就绪 → 需要安装
+if (-not $wslReady) {
+    Enable-WSLFeatures
+    Install-WSLCore
+    # 首次启用后需重启
+    Warn "If WSL features were just enabled, please reboot and re-run"
+}
+
+# 安装发行版
 Ensure-Distro
-wsl.exe --set-default $DistroName 2>&1 | ForEach-Object { Write-Host $_ }
-Ok "WSL 引导完成"
+
+try {
+    wsl.exe --set-default $DistroName 2>&1 | ForEach-Object { Write-Host $_ }
+} catch {}
+Ok "WSL bootstrap done"

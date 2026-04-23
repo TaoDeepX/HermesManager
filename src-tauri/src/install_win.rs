@@ -19,29 +19,68 @@ fn temp_dir() -> PathBuf {
 
 fn write_script(name: &str, content: &str) -> Result<PathBuf> {
     let path = temp_dir().join(name);
-    std::fs::write(&path, content.replace("\r\n", "\n"))?;
+    // PowerShell .ps1 需要 UTF-8 BOM 才能正确显示中文
+    let cleaned = content.replace("\r\n", "\n");
+    if name.ends_with(".ps1") {
+        let mut data = Vec::with_capacity(3 + cleaned.len());
+        data.extend_from_slice(b"\xEF\xBB\xBF"); // UTF-8 BOM
+        data.extend_from_slice(cleaned.as_bytes());
+        std::fs::write(&path, data)?;
+    } else {
+        std::fs::write(&path, cleaned)?;
+    }
     Ok(path)
 }
 
+/// 快速预检：WSL 可用且至少有一个发行版
+fn is_wsl_ready() -> bool {
+    use std::process::Command;
+    // 检查 WSL 是否可用（--version 或 -l 任一成功即可）
+    let wsl_ok = Command::new("wsl").args(["--version"]).output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+        || Command::new("wsl").args(["-l"]).output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if !wsl_ok { return false; }
+    // 检查是否有已安装的发行版
+    let has_distro = Command::new("wsl").args(["-l", "-q"]).output()
+        .map(|o| {
+            // wsl -l -q 输出 UTF-16 LE，需去除空字节后判断非空
+            let text: String = o.stdout.iter()
+                .filter(|&&b| b != 0 && b != 0xFF && b != 0xFE)
+                .map(|&b| b as char)
+                .collect();
+            text.trim().len() > 0
+        })
+        .unwrap_or(false);
+    wsl_ok && has_distro
+}
+
 pub async fn install(app: AppHandle, job_id: &str, opts: &InstallOptions) -> Result<()> {
-    // Step 1: WSL 引导
-    emit_progress(&app, job_id, "wsl", 5, "启用 WSL2 并确保发行版");
-    let ps1 = write_script("wsl_bootstrap.ps1", WSL_BOOTSTRAP_PS1)
-        .context("写入 wsl_bootstrap.ps1 失败")?;
-    let mut args: Vec<String> = vec![
-        "-NoProfile".into(),
-        "-ExecutionPolicy".into(),
-        "Bypass".into(),
-        "-File".into(),
-        ps1.to_string_lossy().into_owned(),
-    ];
-    if opts.use_cn {
-        args.push("-UseCN".into());
-    }
-    let args_ref: Vec<&str> = args.iter().map(String::as_str).collect();
-    let code = run_streaming(&app, job_id, "wsl", "powershell.exe", &args_ref, None).await?;
-    if code != 0 {
-        return Err(anyhow!(
+    // Step 1: WSL 引导（先预检，已就绪则跳过）
+    emit_progress(&app, job_id, "wsl", 5, "检测 WSL 环境");
+    if is_wsl_ready() {
+        emit_log(&app, job_id, "wsl", LogLevel::Info,
+            "WSL and distro already set up, skipping bootstrap");
+    } else {
+        emit_progress(&app, job_id, "wsl", 5, "启用 WSL2 并确保发行版");
+        let ps1 = write_script("wsl_bootstrap.ps1", WSL_BOOTSTRAP_PS1)
+            .context("写入 wsl_bootstrap.ps1 失败")?;
+        let mut args: Vec<String> = vec![
+            "-NoProfile".into(),
+            "-ExecutionPolicy".into(),
+            "Bypass".into(),
+            "-File".into(),
+            ps1.to_string_lossy().into_owned(),
+        ];
+        if opts.use_cn {
+            args.push("-UseCN".into());
+        }
+        let args_ref: Vec<&str> = args.iter().map(String::as_str).collect();
+        let code = run_streaming(&app, job_id, "wsl", "powershell.exe", &args_ref, None).await?;
+        if code != 0 {
+            return Err(anyhow!(
 r#"WSL 引导失败（退出码 {}）。
 
 请以【管理员身份】打开 PowerShell，依次执行以下命令：
@@ -57,8 +96,9 @@ r#"WSL 引导失败（退出码 {}）。
    wsl --set-default-version 2
 
 4. 完成后重新运行 HermesManager"#,
-            code
-        ));
+                code
+            ));
+        }
     }
 
     // Step 2: 写入 hermes_setup.sh 到 WSL 可访问的临时目录
