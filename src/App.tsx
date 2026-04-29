@@ -30,7 +30,12 @@ export default function App() {
         {step !== "welcome" && <StepBar current={step} />}
         <div className="flex-1 px-10 py-8 animate-fade-slide-in" key={step}>
           {step === "welcome" && <Welcome onStart={() => setStep("doctor")} />}
-          {step === "doctor" && <Doctor onNext={() => setStep("provider")} />}
+          {step === "doctor" && (
+            <Doctor
+              onNext={() => setStep("provider")}
+              onSkipToDone={() => setStep("done")}
+            />
+          )}
           {step === "provider" && (
             <ProviderPage
               onSkip={() => setStep("install")}
@@ -155,8 +160,13 @@ function FeatureCard({ icon, title, desc }: { icon: React.ReactNode; title: stri
 
 function buildEnvKv(sel: ProviderSelection): [string, string][] {
   const kv: [string, string][] = [];
-  // 只写 provider 专属的 API Key 到 .env（如 DASHSCOPE_API_KEY、DEEPSEEK_API_KEY）
+  // 写 provider 专属 API Key 到 .env（主键 + 别名键，如 GEMINI_API_KEY + GOOGLE_API_KEY）
   // base_url 和 model 通过 config.yaml 配置（由 install_win.rs Step 5 处理）
-  if (sel.provider.envKey && sel.apiKey) kv.push([sel.provider.envKey, sel.apiKey]);
+  if (sel.provider.envKey && sel.apiKey) {
+    kv.push([sel.provider.envKey, sel.apiKey]);
+    for (const alias of sel.provider.envKeyAliases ?? []) {
+      kv.push([alias, sel.apiKey]);
+    }
+  }
   return kv;
 }

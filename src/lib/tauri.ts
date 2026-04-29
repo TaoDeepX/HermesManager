@@ -38,6 +38,11 @@ export function fixCheck(req: FixRequest): Promise<FixResult> {
   return invoke<FixResult>("doctor_fix", { req });
 }
 
+/** 在新终端窗口启动 hermes（args 可为空 / "--tui" / "gateway setup" 等） */
+export function launchHermesTerminal(args: string = ""): Promise<void> {
+  return invoke<void>("launch_hermes_terminal", { args });
+}
+
 export interface TestRequest {
   base_url: string;
   api_key?: string;

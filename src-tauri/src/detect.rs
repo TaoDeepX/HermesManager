@@ -446,24 +446,57 @@ fn tcp_check(host: &str, port: u16, timeout: Duration) -> bool {
 }
 
 fn check_hermes_installed() -> Check {
-    let found = which::which("hermes").ok();
-    match found {
-        Some(p) => Check {
+    // 三种探测路径：本机 PATH / WSL（Windows）/ ~/hermes-agent 目录
+    #[cfg(target_os = "windows")]
+    let wsl_check: Option<String> = {
+        let out = Command::new("wsl")
+            .args(["--", "bash", "-lc", "command -v hermes && hermes --version 2>/dev/null | head -1"])
+            .output();
+        match out {
+            Ok(o) if o.status.success() => {
+                let text = String::from_utf8_lossy(&o.stdout).trim().to_string();
+                if text.is_empty() { None } else { Some(text) }
+            }
+            _ => None,
+        }
+    };
+    #[cfg(not(target_os = "windows"))]
+    let wsl_check: Option<String> = None;
+
+    let local = which::which("hermes").ok();
+
+    if let Some(p) = local {
+        Check {
             id: "hermes",
             label: "HermesAgent 当前状态",
             level: Level::Info,
             value: format!("已安装：{}", p.display()),
-            hint: Some("检测到已安装，安装流程将切换为『更新/修复』模式。".into()),
+            hint: Some("检测到已安装，可在 Done 页直接启动 hermes。".into()),
             auto_fixable: false,
-        },
-        None => Check {
+        }
+    } else if let Some(info) = wsl_check {
+        let line = info.lines().last().unwrap_or("").trim();
+        Check {
+            id: "hermes",
+            label: "HermesAgent 当前状态",
+            level: Level::Info,
+            value: if line.is_empty() {
+                "已安装（WSL）".into()
+            } else {
+                format!("已安装（WSL）：{}", line)
+            },
+            hint: Some("已检测到 WSL 内的 hermes，可跳过安装直接进入 Done 页。".into()),
+            auto_fixable: false,
+        }
+    } else {
+        Check {
             id: "hermes",
             label: "HermesAgent 当前状态",
             level: Level::Info,
             value: "未安装".into(),
             hint: None,
             auto_fixable: false,
-        },
+        }
     }
 }
 

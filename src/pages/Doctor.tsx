@@ -20,7 +20,13 @@ const LEVEL_META: Record<Level, { icon: React.ElementType; color: string; bg: st
   info: { icon: Info, color: "text-info", bg: "bg-info/10" },
 };
 
-export default function Doctor({ onNext }: { onNext: () => void }) {
+export default function Doctor({
+  onNext,
+  onSkipToDone,
+}: {
+  onNext: () => void;
+  onSkipToDone?: () => void;
+}) {
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +78,9 @@ export default function Doctor({ onNext }: { onNext: () => void }) {
   // 只有"不可自动修复的错误"才阻止进入下一步
   const blockingErrors = report?.checks.filter(c => c.level === "err" && !c.auto_fixable).length ?? 0;
   const canProceed = summary ? blockingErrors === 0 : false;
+  // 检测 hermes 是否已安装（含 WSL 路径）
+  const hermesCheck = report?.checks.find(c => c.id === "hermes");
+  const hermesInstalled = hermesCheck && hermesCheck.value !== "未安装";
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -91,6 +100,24 @@ export default function Doctor({ onNext }: { onNext: () => void }) {
           重新检测
         </button>
       </header>
+
+      {report && hermesInstalled && onSkipToDone && (
+        <div className="mt-5 card p-4 border-success/40 bg-success/5 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-success/15 text-success flex items-center justify-center shrink-0">
+            <CheckCircle2 size={18} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold">检测到 HermesAgent 已安装</div>
+            <div className="text-xs text-text-muted mt-0.5">{hermesCheck?.value} · 可跳过安装直接启动 hermes</div>
+          </div>
+          <button
+            className="btn-primary h-9 px-4 text-xs shrink-0"
+            onClick={onSkipToDone}
+          >
+            直接启动 <ArrowRight size={14} />
+          </button>
+        </div>
+      )}
 
       {report && summary && (
         <div className="mt-6 grid grid-cols-4 gap-3">

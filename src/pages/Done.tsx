@@ -1,100 +1,256 @@
-import { CheckCircle2, Copy, ExternalLink, Terminal, FileText } from "lucide-react";
+import {
+  CheckCircle2,
+  ExternalLink,
+  Rocket,
+  Sparkles,
+  MessagesSquare,
+  Wrench,
+  RefreshCw,
+  Cog,
+  FileText,
+  Brain,
+  Workflow,
+  Zap,
+} from "lucide-react";
 import { useState } from "react";
-import { openExternal } from "../lib/tauri";
+import { openExternal, launchHermesTerminal } from "../lib/tauri";
+import { cn } from "../lib/cn";
+
+type Action = {
+  icon: React.ElementType;
+  title: string;
+  desc: string;
+  cmd: string;
+  primary?: boolean;
+};
+
+const PRIMARY_ACTIONS: Action[] = [
+  {
+    icon: Rocket,
+    title: "TUI 模式（推荐）",
+    desc: "现代化终端界面 · 鼠标选中 · 模态弹层",
+    cmd: "--tui",
+    primary: true,
+  },
+  {
+    icon: Sparkles,
+    title: "经典 CLI 模式",
+    desc: "传统命令行界面 · 兼容老脚本",
+    cmd: "",
+  },
+];
+
+const SECONDARY_ACTIONS: Action[] = [
+  {
+    icon: MessagesSquare,
+    title: "配置消息平台",
+    desc: "Telegram / 飞书 / Discord / 企业微信等 15+ 平台",
+    cmd: "gateway setup",
+  },
+  {
+    icon: Cog,
+    title: "重新配置",
+    desc: "切换 provider · 改 API Key · 调整模型",
+    cmd: "setup",
+  },
+  {
+    icon: Wrench,
+    title: "Hermes 体检",
+    desc: "诊断 hermes 自身配置健康度",
+    cmd: "doctor",
+  },
+  {
+    icon: RefreshCw,
+    title: "更新到最新版",
+    desc: "拉取最新代码 · 升级依赖",
+    cmd: "update",
+  },
+];
+
+const NEXT_STEPS = [
+  {
+    icon: Brain,
+    title: "记忆系统",
+    desc: "自动记住过往对话 · FTS5 跨会话召回",
+    url: "https://hermes-agent.nousresearch.com/docs/user-guide/features/memory",
+  },
+  {
+    icon: Zap,
+    title: "Skills 技能",
+    desc: "Agent 自创技能 · 可分享给他人",
+    url: "https://hermes-agent.nousresearch.com/docs/user-guide/features/skills",
+  },
+  {
+    icon: Workflow,
+    title: "MCP 集成",
+    desc: "接入任意 MCP 服务器 · 扩展能力",
+    url: "https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp",
+  },
+];
 
 export default function Done() {
-  const [copied, setCopied] = useState(false);
+  const [launching, setLaunching] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const cmd = navigator.userAgent.includes("Windows") ? "wsl -- hermes" : "hermes";
-
-  const copy = async () => {
-    await navigator.clipboard.writeText(cmd);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  const handleLaunch = async (cmd: string) => {
+    setLaunching(cmd);
+    setError(null);
+    try {
+      await launchHermesTerminal(cmd);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setTimeout(() => setLaunching(null), 1500);
+    }
   };
 
   return (
-    <div className="max-w-2xl mx-auto text-center">
-      <div className="inline-flex w-16 h-16 rounded-2xl bg-success/10 text-success items-center justify-center">
-        <CheckCircle2 size={32} />
-      </div>
-      <h2 className="mt-5 text-3xl font-bold">HermesAgent 已就绪 🎉</h2>
-      <p className="mt-3 text-text-muted leading-relaxed">
-        恭喜！你的数字管家已经安装完成，现在可以开始和它对话了。
-      </p>
-
-      <div className="mt-8 card p-5 text-left">
-        <div className="text-xs font-medium text-text-muted mb-2 flex items-center gap-1.5">
-          <Terminal size={14} /> 启动命令
+    <div className="max-w-4xl mx-auto pb-8">
+      <div className="text-center">
+        <div className="inline-flex w-16 h-16 rounded-2xl bg-success/10 text-success items-center justify-center">
+          <CheckCircle2 size={32} />
         </div>
-        <div className="flex items-center gap-2">
-          <code className="flex-1 bg-bg-muted rounded-lg px-3 py-2 text-sm font-mono border border-border-subtle">
-            {cmd}
-          </code>
-          <button className="btn-outline h-10 px-3 text-xs" onClick={copy}>
-            <Copy size={14} /> {copied ? "已复制" : "复制"}
-          </button>
-        </div>
-        <div className="mt-2 text-xs text-text-faint">
-          在任意终端（Windows PowerShell / macOS Terminal）输入上方命令即可启动。
-        </div>
+        <h2 className="mt-5 text-3xl font-bold">HermesAgent 已就绪 🎉</h2>
+        <p className="mt-3 text-text-muted leading-relaxed">
+          点击下方任一按钮即可在新终端启动，无需手动复制命令。
+        </p>
       </div>
 
-      <div className="mt-5 grid grid-cols-2 gap-3 text-left">
-        <LinkCard
-          icon={<FileText size={16} />}
-          title="使用指南"
-          desc="什么能做 · 费用说明 · 常见问题"
+      {/* 启动模式选择 */}
+      <div className="mt-8 grid grid-cols-2 gap-3">
+        {PRIMARY_ACTIONS.map((a) => (
+          <ActionCard
+            key={a.cmd}
+            action={a}
+            launching={launching === a.cmd}
+            onClick={() => handleLaunch(a.cmd)}
+          />
+        ))}
+      </div>
+
+      {error && (
+        <div className="mt-3 card p-3 text-xs text-error bg-error/5 border-error/20">
+          启动失败：{error}（你也可以手动在终端执行 <code>hermes</code>）
+        </div>
+      )}
+
+      {/* 常用操作 */}
+      <div className="mt-8">
+        <div className="flex items-center gap-2 text-sm text-text-muted mb-3">
+          <Wrench size={14} /> 常用管理命令
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {SECONDARY_ACTIONS.map((a) => (
+            <ActionCard
+              key={a.cmd}
+              action={a}
+              launching={launching === a.cmd}
+              onClick={() => handleLaunch(a.cmd)}
+              compact
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* 下一步学习 */}
+      <div className="mt-8">
+        <div className="flex items-center gap-2 text-sm text-text-muted mb-3">
+          <Sparkles size={14} /> 接下来探索这些进阶能力
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {NEXT_STEPS.map((s) => (
+            <button
+              key={s.title}
+              className="card p-4 text-left hover:border-brand transition-colors"
+              onClick={() => openExternal(s.url)}
+            >
+              <div className="w-9 h-9 rounded-lg bg-brand-soft text-brand flex items-center justify-center">
+                <s.icon size={16} />
+              </div>
+              <div className="mt-3 font-medium text-sm">{s.title}</div>
+              <div className="mt-1 text-xs text-text-muted leading-relaxed">{s.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-8 flex items-center justify-center gap-4 text-xs text-text-faint">
+        <button
+          className="hover:text-brand flex items-center gap-1"
+          onClick={() => openExternal("https://hermes-agent.nousresearch.com/docs")}
+        >
+          <ExternalLink size={12} /> 官方文档
+        </button>
+        <span>·</span>
+        <button
+          className="hover:text-brand flex items-center gap-1"
           onClick={() =>
             openExternal(
               "https://github.com/TaoDeepX/HermesManager/blob/main/docs/HermesAgent-%E5%B0%8F%E7%99%BD%E6%8C%87%E5%8D%97.md",
             )
           }
-        />
-        <LinkCard
-          icon={<ExternalLink size={16} />}
-          title="官方文档"
-          desc="hermes-agent.nousresearch.com"
-          onClick={() => openExternal("https://hermes-agent.nousresearch.com/docs")}
-        />
-      </div>
-
-      <div className="mt-8 text-xs text-text-faint">
-        遇到问题？
+        >
+          <FileText size={12} /> 中文小白指南
+        </button>
+        <span>·</span>
         <button
-          className="text-brand hover:underline ml-1"
+          className="hover:text-brand flex items-center gap-1"
           onClick={() => openExternal("https://github.com/TaoDeepX/HermesManager/issues/new")}
         >
-          在 GitHub 反馈
+          反馈问题
         </button>
       </div>
     </div>
   );
 }
 
-function LinkCard({
-  icon,
-  title,
-  desc,
+function ActionCard({
+  action,
+  launching,
   onClick,
+  compact,
 }: {
-  icon: React.ReactNode;
-  title: string;
-  desc: string;
+  action: Action;
+  launching: boolean;
   onClick: () => void;
+  compact?: boolean;
 }) {
+  const Icon = action.icon;
   return (
     <button
-      className="card p-4 text-left hover:border-brand transition-colors"
+      className={cn(
+        "card text-left transition-all relative overflow-hidden group",
+        compact ? "p-3" : "p-5",
+        action.primary
+          ? "border-brand/40 bg-brand/5 hover:border-brand hover:bg-brand/10"
+          : "hover:border-brand/40",
+        launching && "opacity-70 pointer-events-none",
+      )}
       onClick={onClick}
+      disabled={launching}
     >
-      <div className="flex items-center gap-2">
-        <div className="w-8 h-8 rounded-lg bg-brand-soft text-brand flex items-center justify-center">
-          {icon}
+      <div className="flex items-center gap-3">
+        <div
+          className={cn(
+            "rounded-lg flex items-center justify-center shrink-0",
+            compact ? "w-8 h-8" : "w-10 h-10",
+            action.primary ? "bg-brand text-black" : "bg-brand-soft text-brand",
+          )}
+        >
+          <Icon size={compact ? 14 : 18} />
         </div>
-        <div className="font-medium text-sm">{title}</div>
+        <div className="flex-1 min-w-0">
+          <div className={cn("font-semibold", compact ? "text-xs" : "text-sm")}>
+            {action.title}
+          </div>
+          <div className={cn("text-text-muted leading-snug", compact ? "text-[10px] mt-0.5" : "text-xs mt-1")}>
+            {action.desc}
+          </div>
+        </div>
+        {launching && (
+          <div className="text-xs text-brand animate-pulse">启动中…</div>
+        )}
       </div>
-      <div className="mt-2 text-xs text-text-muted">{desc}</div>
     </button>
   );
 }
