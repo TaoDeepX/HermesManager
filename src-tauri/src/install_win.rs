@@ -122,12 +122,13 @@ r#"WSL 引导失败（退出码 {}）。
         "export HM_USE_CN={} && chmod +x '{}' && bash '{}'",
         cn, wsl_path, wsl_path
     );
+    // 用 root 运行避免 sudo 密码问题，脚本会自动 chown 给默认用户
     let code = run_streaming(
         &app,
         job_id,
         "hermes",
         "wsl.exe",
-        &["--", "bash", "-lc", &inner_cmd],
+        &["-u", "root", "--", "bash", "-lc", &inner_cmd],
         None,
     )
     .await?;

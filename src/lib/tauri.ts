@@ -43,6 +43,10 @@ export function launchHermesTerminal(args: string = ""): Promise<void> {
   return invoke<void>("launch_hermes_terminal", { args });
 }
 
+export function uninstallHermes(): Promise<string> {
+  return invoke<string>("uninstall_hermes");
+}
+
 export interface TestRequest {
   base_url: string;
   api_key?: string;

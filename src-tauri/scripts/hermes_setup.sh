@@ -30,6 +30,53 @@ ok()  { printf "\033[1;32m[  ok  ]\033[0m %s\n" "$*"; }
 warn(){ printf "\033[1;33m[ warn ]\033[0m %s\n" "$*"; }
 err() { printf "\033[1;31m[ err  ]\033[0m %s\n" "$*" >&2; }
 
+# 获取 WSL 默认用户（非 root）
+get_default_user() {
+    # 方法 1: 从 /etc/passwd 找 uid 1000 的用户
+    local user
+    user=$(awk -F: '$3 == 1000 { print $1 }' /etc/passwd 2>/dev/null)
+    if [ -n "$user" ]; then
+        echo "$user"
+        return
+    fi
+    # 方法 2: 从 wsl.conf 读取
+    if [ -f /etc/wsl.conf ]; then
+        user=$(grep -oP '(?<=default=)\w+' /etc/wsl.conf 2>/dev/null | head -1)
+        if [ -n "$user" ]; then
+            echo "$user"
+            return
+        fi
+    fi
+    # 兜底：返回空
+    echo ""
+}
+
+# 如果是 root 运行，设置目标用户用于最后 chown
+setup_target_user() {
+    if [ "$(id -u)" = "0" ]; then
+        TARGET_USER=$(get_default_user)
+        if [ -n "$TARGET_USER" ]; then
+            log "以 root 运行，安装完成后将 chown 给用户: $TARGET_USER"
+            # 设置 HOME 为目标用户的 home 目录
+            export HOME="/home/$TARGET_USER"
+        fi
+    else
+        TARGET_USER=""
+    fi
+}
+
+# 安装完成后修正文件属主
+fix_ownership() {
+    if [ -n "${TARGET_USER:-}" ] && [ "$(id -u)" = "0" ]; then
+        log "修正文件属主为 $TARGET_USER"
+        chown -R "$TARGET_USER:$TARGET_USER" "/home/$TARGET_USER/.local/bin/hermes" 2>/dev/null || true
+        chown -R "$TARGET_USER:$TARGET_USER" "/home/$TARGET_USER/.hermes" 2>/dev/null || true
+        chown -R "$TARGET_USER:$TARGET_USER" "/home/$TARGET_USER/hermes-agent" 2>/dev/null || true
+        chown -R "$TARGET_USER:$TARGET_USER" "/home/$TARGET_USER/.local" 2>/dev/null || true
+        ok "文件属主已修正"
+    fi
+}
+
 detect_os() {
     case "$(uname -s)" in
         Linux*)  OS=linux ;;
@@ -190,6 +237,9 @@ run_doctor() {
 main() {
     detect_os
     log "开始安装 HermesAgent · OS=$OS · CN=$HM_USE_CN"
+    if [ "$OS" = "linux" ]; then
+        setup_target_user
+    fi
     install_base_deps
     install_uv
     install_node
@@ -197,6 +247,9 @@ main() {
     install_python_deps
     setup_config_dir
     link_hermes_cli
+    if [ "$OS" = "linux" ]; then
+        fix_ownership
+    fi
     run_doctor
     ok "全部完成！在新终端执行 hermes 即可开始对话"
 }

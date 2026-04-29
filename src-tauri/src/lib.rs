@@ -88,6 +88,49 @@ fn launch_hermes_terminal(args: String) -> Result<(), String> {
     }
 }
 
+/// 完全卸载 HermesAgent（删除源码、配置、CLI）
+#[tauri::command]
+fn uninstall_hermes() -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        // WSL 内删除
+        let script = r#"
+rm -rf ~/hermes-agent 2>/dev/null
+rm -rf ~/.hermes 2>/dev/null
+rm -f ~/.local/bin/hermes 2>/dev/null
+echo "HermesAgent 已完全删除"
+"#;
+        let output = std::process::Command::new("wsl")
+            .args(["-u", "root", "--", "bash", "-c", script])
+            .output()
+            .map_err(|e| format!("执行删除命令失败：{}", e))?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !output.status.success() {
+            return Err(format!("删除失败：{}\n{}", stdout, stderr));
+        }
+        Ok(stdout.trim().to_string())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "~".to_string());
+        let paths = [
+            format!("{}/hermes-agent", home),
+            format!("{}/.hermes", home),
+            format!("{}/.local/bin/hermes", home),
+        ];
+        for p in &paths {
+            let _ = std::fs::remove_dir_all(p);
+            let _ = std::fs::remove_file(p);
+        }
+        Ok("HermesAgent 已完全删除".to_string())
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        Err("当前平台不支持".into())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -99,7 +142,8 @@ pub fn run() {
             test_provider,
             list_models,
             open_external,
-            launch_hermes_terminal
+            launch_hermes_terminal,
+            uninstall_hermes
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
