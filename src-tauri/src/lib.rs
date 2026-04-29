@@ -52,20 +52,13 @@ fn launch_hermes_terminal(args: String) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
-        // 优先用 Windows Terminal (wt.exe)，回退到普通 wsl 启动
-        let wt_cmd = format!("{} ; read -p '按 Enter 关闭...'", hermes_cmd);
-        let wt = Command::new("cmd")
-            .args(["/C", "start", "", "wt.exe", "-w", "0", "wsl", "--", "bash", "-lc", &wt_cmd])
-            .spawn();
-        if wt.is_ok() {
-            return Ok(());
-        }
-        // Fallback: 用 conhost 启动 wsl
-        let fallback_cmd = format!("{} ; read -p '按 Enter 关闭...'", hermes_cmd);
-        Command::new("cmd")
-            .args(["/C", "start", "", "wsl", "--", "bash", "-lc", &fallback_cmd])
+        // 用 Windows Terminal 打开新标签页运行 hermes
+        // 注意：wt.exe 参数用 -- 分隔，避免解析问题
+        let bash_cmd = format!("{} ; echo ''; read -p '按 Enter 关闭...'", hermes_cmd);
+        Command::new("wt.exe")
+            .args(["wsl", "--", "bash", "-lc", &bash_cmd])
             .spawn()
-            .map_err(|e| format!("启动 WSL 终端失败：{}", e))?;
+            .map_err(|e| format!("启动 Windows Terminal 失败：{}", e))?;
         Ok(())
     }
     #[cfg(target_os = "macos")]
