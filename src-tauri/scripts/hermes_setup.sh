@@ -191,11 +191,16 @@ clone_hermes() {
 install_python_deps() {
     local repo="$HOME/hermes-agent"
     cd "$repo"
+    # 确保 uv 在 PATH 中
+    export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
     log "创建虚拟环境 (Python $HM_PYTHON)"
     uv venv venv --python "$HM_PYTHON" --allow-existing
     export VIRTUAL_ENV="$repo/venv"
     log "安装 Python 依赖：[$HM_EXTRAS]"
-    uv pip install -e ".[$HM_EXTRAS]"
+    if ! uv pip install -e ".[$HM_EXTRAS]"; then
+        err "uv pip install 失败，重试一次..."
+        uv pip install -e ".[$HM_EXTRAS]"
+    fi
     ok "Python 依赖安装完成"
 }
 
