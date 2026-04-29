@@ -52,17 +52,21 @@ fn launch_hermes_terminal(args: String) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NEW_CONSOLE: u32 = 0x00000010;
+
         let bash_cmd = format!("{} ; echo ''; read -p '按 Enter 关闭...'", hermes_cmd);
-        // 优先 Windows Terminal，不存在则 fallback 到 cmd start
+        // 优先 Windows Terminal
         let launched = Command::new("wt.exe")
             .args(["wsl", "--", "bash", "-lc", &bash_cmd])
             .spawn();
         if launched.is_ok() {
             return Ok(());
         }
-        // Fallback: 用 cmd /C start 打开新窗口运行 wsl
-        Command::new("cmd")
-            .args(["/C", "start", "\"Hermes\"", "wsl", "--", "bash", "-lc", &bash_cmd])
+        // Fallback: 直接用 CREATE_NEW_CONSOLE 标志在新窗口运行 wsl
+        Command::new("wsl")
+            .args(["--", "bash", "-lc", &bash_cmd])
+            .creation_flags(CREATE_NEW_CONSOLE)
             .spawn()
             .map_err(|e| format!("启动终端失败：{} (你也可以手动在终端执行 hermes)", e))?;
         Ok(())
