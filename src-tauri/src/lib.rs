@@ -86,11 +86,17 @@ fn launch_hermes_terminal(args: String) -> Result<(), String> {
 fn uninstall_hermes() -> Result<String, String> {
     #[cfg(target_os = "windows")]
     {
-        // WSL 内删除
+        // WSL 内删除：遍历所有 /home 下的用户目录
         let script = r#"
-rm -rf ~/hermes-agent 2>/dev/null
-rm -rf ~/.hermes 2>/dev/null
-rm -f ~/.local/bin/hermes 2>/dev/null
+for home_dir in /home/*/; do
+    rm -rf "${home_dir}hermes-agent" 2>/dev/null
+    rm -rf "${home_dir}.hermes" 2>/dev/null
+    rm -f "${home_dir}.local/bin/hermes" 2>/dev/null
+done
+# 也清理 root 的
+rm -rf /root/hermes-agent 2>/dev/null
+rm -rf /root/.hermes 2>/dev/null
+rm -f /root/.local/bin/hermes 2>/dev/null
 echo "HermesAgent 已完全删除"
 "#;
         let output = std::process::Command::new("wsl")
