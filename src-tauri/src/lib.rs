@@ -62,7 +62,7 @@ fn launch_hermes_terminal(args: String) -> Result<(), String> {
         }
         // Fallback: 用 cmd /C start 打开新窗口运行 wsl
         Command::new("cmd")
-            .args(["/C", "start", "Hermes", "wsl", "--", "bash", "-lc", &bash_cmd])
+            .args(["/C", "start", "\"Hermes\"", "wsl", "--", "bash", "-lc", &bash_cmd])
             .spawn()
             .map_err(|e| format!("启动终端失败：{} (你也可以手动在终端执行 hermes)", e))?;
         Ok(())
