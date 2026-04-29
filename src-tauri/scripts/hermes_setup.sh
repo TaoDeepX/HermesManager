@@ -172,7 +172,7 @@ clone_hermes() {
         for mirror in "${CN_GIT_MIRRORS[@]}"; do
             local url="${mirror}/${repo_path}"
             log "尝试镜像：$url"
-            if git clone --recurse-submodules --timeout=30 "$url" "$target" 2>&1; then
+            if timeout 120 git clone --recurse-submodules "$url" "$target" 2>&1; then
                 ok "克隆完成（镜像：$mirror）"
                 return
             fi
