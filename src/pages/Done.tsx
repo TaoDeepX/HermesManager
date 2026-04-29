@@ -93,6 +93,7 @@ export default function Done() {
   const [error, setError] = useState<string | null>(null);
   const [uninstalling, setUninstalling] = useState(false);
   const [confirmUninstall, setConfirmUninstall] = useState(false);
+  const [uninstalled, setUninstalled] = useState(false);
 
   const handleUninstall = async () => {
     if (!confirmUninstall) {
@@ -103,7 +104,7 @@ export default function Done() {
     setError(null);
     try {
       await uninstallHermes();
-      alert("HermesAgent 已完全删除，可关闭此应用。");
+      setUninstalled(true);
     } catch (e) {
       setError(String(e));
     } finally {
@@ -224,23 +225,32 @@ export default function Done() {
       {/* 危险操作区 */}
       <div className="mt-8 pt-6 border-t border-border">
         <h3 className="text-xs text-text-muted mb-3">危险操作</h3>
-        <button
-          onClick={handleUninstall}
-          disabled={uninstalling}
-          className={cn(
-            "w-full p-3 rounded-lg border text-sm transition-all",
-            confirmUninstall
-              ? "border-red-500 bg-red-500/10 text-red-500 hover:bg-red-500/20"
-              : "border-border text-text-muted hover:border-red-500/50 hover:text-red-500",
-            uninstalling && "opacity-50 pointer-events-none"
-          )}
-        >
-          {uninstalling ? "删除中..." : confirmUninstall ? "⚠️ 确认删除？点击再次确认" : "🗑️ 完全卸载 HermesAgent"}
-        </button>
-        {confirmUninstall && (
-          <p className="mt-2 text-xs text-red-500/80">
-            将删除 ~/hermes-agent、~/.hermes 和 CLI。此操作不可恢复。
-          </p>
+        {uninstalled ? (
+          <div className="w-full p-4 rounded-lg border border-green-500/30 bg-green-500/10 text-center">
+            <div className="text-green-500 font-medium">✓ HermesAgent 已完全删除</div>
+            <p className="mt-1 text-xs text-text-muted">可关闭此应用</p>
+          </div>
+        ) : (
+          <>
+            <button
+              onClick={handleUninstall}
+              disabled={uninstalling}
+              className={cn(
+                "w-full p-3 rounded-lg border text-sm transition-all",
+                confirmUninstall
+                  ? "border-red-500 bg-red-500/10 text-red-500 hover:bg-red-500/20"
+                  : "border-border text-text-muted hover:border-red-500/50 hover:text-red-500",
+                uninstalling && "opacity-50 pointer-events-none"
+              )}
+            >
+              {uninstalling ? "删除中..." : confirmUninstall ? "⚠️ 确认删除？点击再次确认" : "🗑️ 完全卸载 HermesAgent"}
+            </button>
+            {confirmUninstall && (
+              <p className="mt-2 text-xs text-red-500/80">
+                将删除 ~/hermes-agent、~/.hermes 和 CLI。此操作不可恢复。
+              </p>
+            )}
+          </>
         )}
       </div>
     </div>
