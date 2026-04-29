@@ -86,23 +86,29 @@ fn launch_hermes_terminal(args: String) -> Result<(), String> {
 fn uninstall_hermes() -> Result<String, String> {
     #[cfg(target_os = "windows")]
     {
-        // WSL 内删除：遍历所有 /home 下的用户目录
-        let script = r#"
+        // WSL 内删除：写临时脚本文件避免 wsl.exe 吞 $ 变量
+        let script = r#"#!/bin/bash
 for home_dir in /home/*/; do
     rm -rf "${home_dir}hermes-agent" 2>/dev/null
     rm -rf "${home_dir}.hermes" 2>/dev/null
     rm -f "${home_dir}.local/bin/hermes" 2>/dev/null
 done
-# 也清理 root 的
 rm -rf /root/hermes-agent 2>/dev/null
 rm -rf /root/.hermes 2>/dev/null
 rm -f /root/.local/bin/hermes 2>/dev/null
 echo "HermesAgent 已完全删除"
 "#;
+        let tmp = std::env::temp_dir().join("hermes_uninstall.sh");
+        std::fs::write(&tmp, script).map_err(|e| format!("写入卸载脚本失败：{}", e))?;
+        // Windows 路径转 WSL 路径
+        let drive = tmp.to_string_lossy().chars().next().unwrap_or('C');
+        let rest = tmp.to_string_lossy()[3..].replace('\\', "/");
+        let wsl_path = format!("/mnt/{}/{}", drive.to_ascii_lowercase(), rest);
         let output = std::process::Command::new("wsl")
-            .args(["-u", "root", "--", "bash", "-c", script])
+            .args(["-u", "root", "--", "bash", &wsl_path])
             .output()
             .map_err(|e| format!("执行删除命令失败：{}", e))?;
+        let _ = std::fs::remove_file(&tmp);
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
         if !output.status.success() {
