@@ -197,9 +197,10 @@ install_python_deps() {
     uv venv venv --python "$HM_PYTHON" --allow-existing
     export VIRTUAL_ENV="$repo/venv"
     log "安装 Python 依赖：[$HM_EXTRAS]"
-    if ! uv pip install -e ".[$HM_EXTRAS]"; then
+    # 覆盖 exclude-newer 避免镜像缺少上传日期导致 python-olm 等包被过滤
+    if ! uv pip install --exclude-newer 2099-01-01 -e ".[$HM_EXTRAS]"; then
         err "uv pip install 失败，重试一次..."
-        uv pip install -e ".[$HM_EXTRAS]"
+        uv pip install --exclude-newer 2099-01-01 -e ".[$HM_EXTRAS]"
     fi
     ok "Python 依赖安装完成"
 }
