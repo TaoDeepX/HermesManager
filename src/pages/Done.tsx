@@ -88,7 +88,7 @@ const NEXT_STEPS = [
   },
 ];
 
-export default function Done() {
+export default function Done({ onUninstalled }: { onUninstalled?: () => void } = {}) {
   const [launching, setLaunching] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [uninstalling, setUninstalling] = useState(false);
@@ -105,6 +105,10 @@ export default function Done() {
     try {
       await uninstallHermes();
       setUninstalled(true);
+      // 2 秒后自动返回体检页（让用户看到成功提示）
+      setTimeout(() => {
+        onUninstalled?.();
+      }, 2000);
     } catch (e) {
       setError(String(e));
     } finally {

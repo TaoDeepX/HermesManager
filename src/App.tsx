@@ -55,7 +55,7 @@ export default function App() {
               onDone={() => setStep("done")}
             />
           )}
-          {step === "done" && <Done />}
+          {step === "done" && <Done onUninstalled={() => setStep("doctor")} />}
         </div>
       </main>
     </div>
