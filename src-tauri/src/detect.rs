@@ -52,6 +52,7 @@ pub fn run_all() -> Report {
         checks.push(check_virtualization_win());
         checks.push(check_wsl_win());
         checks.push(check_wsl_distro_win());
+        checks.push(check_windows_terminal());
     }
 
     #[cfg(target_os = "macos")]
@@ -298,6 +299,33 @@ fn check_wsl_distro_win() -> Check {
             hint: Some("WSL 未安装或异常。".into()),
             auto_fixable: true,
         },
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn check_windows_terminal() -> Check {
+    // wt.exe 通常在 PATH 中（来自 WindowsApps），没有则用 where 兜底
+    let found = Command::new("where").args(["wt.exe"]).output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if found {
+        Check {
+            id: "windows_terminal",
+            label: "Windows Terminal",
+            level: Level::Ok,
+            value: "已安装".into(),
+            hint: None,
+            auto_fixable: false,
+        }
+    } else {
+        Check {
+            id: "windows_terminal",
+            label: "Windows Terminal",
+            level: Level::Warn,
+            value: "未安装（强烈建议）".into(),
+            hint: Some("默认 cmd 控制台对 TUI 程序键盘/中文输入支持差。请在微软商店安装 Windows Terminal。".into()),
+            auto_fixable: false,
+        }
     }
 }
 
