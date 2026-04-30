@@ -254,10 +254,11 @@ main() {
     install_python_deps
     setup_config_dir
     link_hermes_cli
+    run_doctor
+    # doctor 运行后再 chown，确保 doctor 新建的日志/缓存文件也属于目标用户
     if [ "$OS" = "linux" ]; then
         fix_ownership
     fi
-    run_doctor
     ok "全部完成！在新终端执行 hermes 即可开始对话"
 }
 
